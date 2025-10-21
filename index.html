@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🌱 柔和清新旅遊導覽 - 情境感知版</title>
+    <link rel="stylesheet" href="style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@300;400;700&display=swap" rel="stylesheet">
+</head>
+<body>
+
+    <header class="header">
+        <h1>🌱 輕旅行日常導覽</h1>
+        <p>探索屬於你的柔和清新時光</p>
+    </header>
+
+    <section id="api-config" class="card config-section">
+        <h2>🔑 API 密鑰設定</h2>
+        <div class="input-group">
+            <label for="gemini-api-key">Gemini API Key:</label>
+            <input type="password" id="gemini-api-key" placeholder="輸入您的密鑰">
+            <button id="verify-key-btn" class="soft-btn primary-btn">驗證並啟用</button>
+        </div>
+        <p id="api-status" class="status-message">狀態：未驗證</p>
+    </section>
+
+    <section id="context-interaction" class="card context-section hidden">
+        <h2>🧭 導覽助理通知</h2>
+        <div id="interaction-content">
+            <p id="context-message" class="assistant-message"></p>
+            <div id="user-response-area" class="response-area hidden">
+                </div>
+        </div>
+    </section>
+
+    <main class="main-content">
+
+        <aside class="sidebar card">
+            <h2>🌍 旅遊規劃與地區選擇</h2>
+            
+            <div class="tab-buttons">
+                <button id="show-region-btn" class="soft-btn secondary-btn half-width active" disabled>內建地區</button>
+                <button id="show-custom-btn" class="soft-btn secondary-btn half-width" disabled>自訂行程</button>
+            </div>
+            <hr>
+
+            <div id="region-menu-panel" class="menu-panel">
+                <div id="region-menu" class="menu-list">
+                    <h3>選擇內建地區：</h3>
+                    <button class="region-btn soft-btn active" data-region="taipei">台北都會</button>
+                    <button class="region-btn soft-btn" data-region="hualien">花蓮海岸</button>
+                    <button class="region-btn soft-btn" data-region="tainan">台南古都</button>
+                </div>
+            </div>
+
+            <div id="custom-plan-panel" class="menu-panel hidden">
+                <form id="custom-plan-form">
+                    <h3>✏️ 自訂旅遊行程</h3>
+                    <div class="input-group-vertical">
+                        <label for="travel-country">旅遊國家/地區:</label>
+                        <input type="text" id="travel-country" value="台灣" required>
+                    </div>
+                    <div class="input-group-vertical">
+                        <label for="travel-days">遊玩天數:</label>
+                        <input type="number" id="travel-days" value="3" min="1" required>
+                    </div>
+                    <div class="input-group-vertical">
+                        <label for="travel-style">旅遊風格:</label>
+                        <select id="travel-style" required>
+                            <option value="清新日常">清新日常</option>
+                            <option value="文化探索">文化探索</option>
+                            <option value="美食之旅">美食之旅</option>
+                            <option value="戶外冒險">戶外冒險</option>
+                        </select>
+                    </div>
+                    <div class="input-group-vertical">
+                        <label for="custom-spots">自訂景點 (選填，每行一個):</label>
+                        <textarea id="custom-spots" rows="4" placeholder="例如：台北市立動物園、貓空纜車"></textarea>
+                    </div>
+                    <button type="submit" id="generate-custom-btn" class="soft-btn primary-btn full-width" disabled>🤖 AI 生成專屬導覽</button>
+                </form>
+            </div>
+            
+        </aside>
+
+        <section class="content-display">
+            
+            <div class="spot-map-container">
+                
+                <div id="spot-list" class="spot-grid">
+                    <h2>🖼️ 本日推薦景點</h2>
+                    <p class="placeholder-text">⚠️ 請先在上方「API 密鑰設定」區塊完成驗證，才能選擇行程。</p>
+                </div>
+                
+                <div id="map-container" class="map-container card">
+                    <h2>📍 景點位置與路徑</h2>
+                    <div id="map-display" class="map-display">
+                        <p class="map-placeholder">地圖功能載入中 (需 Google Maps API Key)</p>
+                    </div>
+                    <div class="map-actions">
+                        <button id="generate-path-btn" class="soft-btn primary-btn" disabled>🗺️ 生成路徑規劃</button>
+                    </div>
+                </div>
+
+            </div>
+
+            <div id="spot-detail" class="card hidden">
+                <h2 id="detail-title">景點詳細介紹</h2>
+                <div id="detail-image" class="detail-image">
+                    <img src="" alt="景點圖片" class="hidden">
+                </div>
+                <div id="detail-content">
+                    <p>點擊景點卡片查看詳細資訊。</p>
+                </div>
+                <div id="detail-coords"></div>
+            </div>
+
+        </section>
+
+    </main>
+
+    <script src="script.js"></script>
+
+</body>
+</html>
