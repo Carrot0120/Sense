@@ -1,0 +1,316 @@
+/*
+ * 主題風格：柔和清新的日常風
+ * 設計元素：淺色背景、柔和陰影、圓角邊框、漸層色彩
+ */
+
+:root {
+    --primary-color: #6a9c89; /* 柔和綠色 */
+    --secondary-color: #c4d7e0; /* 柔和藍色 */
+    --background-light: #f4f7f6; /* 淺色背景 */
+    --card-background: #ffffff; /* 卡片背景 */
+    --text-color: #333333; /* 主要文字顏色 */
+    --soft-shadow: 0 4px 8px rgba(0, 0, 0, 0.05); /* 柔和陰影 */
+    --border-radius-soft: 12px;
+}
+
+* {
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'Noto Sans TC', sans-serif;
+    background-color: var(--background-light);
+    color: var(--text-color);
+    margin: 0;
+    padding: 20px;
+    line-height: 1.6;
+}
+
+/* --- 標題區 --- */
+.header {
+    text-align: center;
+    margin-bottom: 30px;
+    padding: 20px;
+    background: linear-gradient(135deg, var(--secondary-color), var(--primary-color) 70%);
+    color: var(--card-background);
+    border-radius: var(--border-radius-soft);
+    box-shadow: var(--soft-shadow);
+}
+
+/* --- 卡片通用樣式 --- */
+.card {
+    background-color: var(--card-background);
+    padding: 20px;
+    border-radius: var(--border-radius-soft);
+    box-shadow: var(--soft-shadow);
+    margin-bottom: 20px;
+}
+
+/* --- 佈局 --- */
+.main-content {
+    display: flex;
+    gap: 20px;
+    max-width: 1200px;
+    margin: 0 auto;
+}
+
+.sidebar {
+    flex: 0 0 250px; 
+    height: fit-content;
+}
+
+.content-display {
+    flex: 1;
+}
+
+.spot-map-container {
+    display: grid;
+    grid-template-columns: 1fr 1.5fr;
+    gap: 20px;
+}
+
+/* --- API 設定區 --- */
+.config-section {
+    max-width: 600px;
+    margin: 0 auto 30px;
+    text-align: center;
+}
+
+.input-group {
+    margin-bottom: 15px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.input-group input {
+    flex-grow: 1;
+    padding: 10px;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+}
+
+/* --- 按鈕通用樣式 --- */
+.soft-btn {
+    padding: 10px 15px;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    font-weight: 500;
+}
+
+.primary-btn {
+    background-color: var(--primary-color);
+    color: var(--card-background);
+}
+
+.primary-btn:hover {
+    background-color: #5b8777;
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+}
+
+.secondary-btn {
+    background-color: var(--secondary-color);
+    color: var(--text-color);
+}
+
+.secondary-btn:hover {
+    background-color: #b0c3d0;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+}
+
+.full-width {
+    width: 100%;
+    margin-bottom: 10px;
+}
+
+/* --- 按鈕禁用樣式 (重要：API未驗證時使用) --- */
+.soft-btn:disabled, 
+.region-btn:disabled {
+    background-color: #e0e0e0 !important;
+    color: #999 !important;
+    cursor: not-allowed;
+    box-shadow: none !important;
+    opacity: 0.7;
+}
+
+/* --- 側邊欄切換按鈕 (Tab Buttons) --- */
+.tab-buttons {
+    display: flex;
+    gap: 5px;
+    margin-bottom: 10px;
+}
+
+.half-width {
+    flex: 1;
+}
+
+.tab-buttons .soft-btn.active {
+    background-color: var(--primary-color);
+    color: var(--card-background);
+}
+
+.tab-buttons .soft-btn {
+    padding: 8px;
+    font-weight: 700;
+}
+
+.menu-panel.hidden {
+    display: none;
+}
+
+.input-group-vertical {
+    margin-bottom: 15px;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 5px;
+}
+
+.input-group-vertical input,
+.input-group-vertical select,
+.input-group-vertical textarea {
+    width: 100%;
+    padding: 10px;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+}
+
+
+/* --- 地區選單 --- */
+.menu-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-top: 15px;
+}
+
+.region-btn {
+    text-align: left;
+    background-color: transparent;
+    border: 1px solid #eee;
+    color: var(--text-color);
+}
+
+.region-btn.active {
+    background-color: var(--primary-color);
+    color: var(--card-background);
+    font-weight: 700;
+}
+
+/* --- 景點卡片區 --- */
+.spot-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
+
+.spot-card {
+    background-color: var(--card-background);
+    padding: 15px;
+    border-radius: var(--border-radius-soft);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+    cursor: pointer;
+    transition: transform 0.2s, box-shadow 0.2s;
+    border-left: 5px solid var(--secondary-color);
+}
+
+.spot-card:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 6px 12px rgba(0, 0, 0, 0.1);
+}
+
+.spot-card.selected {
+    border: 2px solid var(--primary-color);
+    border-left: 5px solid var(--primary-color);
+    box-shadow: 0 0 15px rgba(106, 156, 137, 0.5);
+}
+
+.placeholder-text {
+    color: #999;
+    padding: 20px;
+    text-align: center;
+}
+
+/* --- 地圖展示區 & 景點詳細介紹區 --- */
+.map-display {
+    height: 300px;
+    background-color: #e0e0e0;
+    border-radius: 8px;
+    margin-bottom: 15px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    overflow: hidden;
+}
+
+#spot-detail.hidden {
+    display: none;
+}
+
+.detail-image {
+    max-height: 250px;
+    overflow: hidden;
+    border-radius: 8px;
+    margin: 15px 0;
+}
+
+.detail-image img {
+    width: 100%;
+    height: auto;
+    display: block;
+    object-fit: cover;
+}
+
+
+/* --- 情境互動區樣式 (Context Interaction) --- */
+.context-section {
+    max-width: 600px;
+    margin: 0 auto 30px;
+    padding: 20px;
+    border: 2px solid var(--secondary-color);
+    box-shadow: 0 0 15px rgba(196, 215, 224, 0.7); 
+    text-align: center;
+}
+
+.assistant-message {
+    font-size: 1.1em;
+    font-weight: 500;
+    color: var(--text-color);
+    margin-bottom: 15px;
+}
+
+.response-area {
+    display: flex;
+    justify-content: center;
+    gap: 10px;
+}
+
+.context-section.hidden {
+    display: none;
+}
+
+/* 強化提示 (情境改變建議) */
+.suggestion-highlight {
+    border-left: 5px solid var(--primary-color); 
+    padding-left: 10px;
+    font-weight: 700;
+    margin: 5px 0;
+}
+
+/* 響應式設計 */
+@media (max-width: 900px) {
+    .main-content {
+        flex-direction: column;
+    }
+
+    .spot-map-container {
+        grid-template-columns: 1fr;
+    }
+
+    .sidebar {
+        width: 100%;
+        flex: auto;
+    }
+}
