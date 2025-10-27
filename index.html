@@ -3,123 +3,829 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>🌱 很遊SENSE嘛</title>
-    <link rel="stylesheet" href="style.css">
-    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@300;400;700&display=swap" rel="stylesheet">
+    <title>很有SENSE嘛~</title>
+    <script type="module" src="https://esm.run/@google/genai"></script>
+    <style>
+        /* -------------------- 視覺設計與 RWD 基礎 -------------------- */
+        :root {
+            /* 預設主題色 (浪漫主題) */
+            --main-color: #e91e63;
+            --light-color: #ff80ab;
+            --background-color: #fce4ec;
+            --card-color: #fff8e1;
+        }
+
+        body { 
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+            margin: 0; 
+            background-color: var(--background-color); 
+            color: #333;
+            transition: background-color 0.8s ease; 
+        }
+
+        header {
+            background-color: var(--main-color); 
+            color: white;
+            padding: 20px;
+            text-align: center;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+            margin-bottom: 25px;
+            transition: background-color 0.8s ease;
+        }
+        
+        h1 { margin: 0; font-size: 2.2em; }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 15px;
+        }
+
+        #planner-form { 
+            background-color: #ffffff; 
+            padding: 30px; 
+            border-radius: 15px; 
+            box-shadow: 0 10px 25px rgba(0,0,0,0.15); 
+            margin-bottom: 30px; 
+            border-top: 6px solid var(--light-color); 
+            transition: border-top-color 0.8s ease;
+        }
+        
+        /* 表單網格佈局 */
+        #input-fields {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); 
+            gap: 15px 20px;
+            margin-bottom: 20px;
+        }
+
+        /* 輸入/選擇框樣式 */
+        input[type="text"], input[type="number"], select {
+            width: 100%;
+            padding: 12px; 
+            margin-top: 5px;
+            border: 1px solid #ccc;
+            border-radius: 8px; 
+            font-size: 1em;
+            box-sizing: border-box;
+        }
+        input:focus, select:focus { border-color: var(--main-color); outline: none; box-shadow: 0 0 8px rgba(233, 30, 99, 0.5); }
+        
+        /* Key 輸入和生成按鈕樣式 */
+        #key-input-group { display: flex; align-items: center; gap: 10px; margin-bottom: 15px; }
+        #validate-btn { padding: 10px 15px; background-color: #ff9800; color: white; border: none; border-radius: 4px; cursor: pointer; }
+        #generate-btn { 
+            width: 100%;
+            padding: 18px 20px; 
+            background-color: var(--main-color); 
+            color: white; 
+            border: none; 
+            border-radius: 10px; 
+            cursor: pointer; 
+            font-size: 1.3em;
+            font-weight: bold;
+            margin-top: 15px;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+            transition: background-color 0.8s ease;
+        }
+        #generate-btn:hover { background-color: #c2185b; }
+        #generate-btn:disabled { background-color: #ccc; cursor: not-allowed; box-shadow: none; }
+        
+        /* 輸出結果樣式 */
+        #itinerary-output { background-color: #ffffff; padding: 25px; border-radius: 15px; box-shadow: 0 10px 25px rgba(0,0,0,0.15); overflow-x: auto; }
+        .day-plan { background-color: var(--card-color); border: 1px solid var(--light-color); margin-bottom: 30px; padding: 20px; border-radius: 12px; transition: background-color 0.8s ease, border-color 0.8s ease; }
+        .day-plan h3 { color: var(--main-color); border-bottom: 3px solid var(--light-color); padding-bottom: 5px; margin-top: 0; transition: color 0.8s ease, border-bottom-color 0.8s ease; }
+        
+        /* AI 旅伴語氣導語 */
+        #ai-greeting {
+            background-color: #e0f7fa;
+            color: #00796b;
+            padding: 15px 20px;
+            border-radius: 8px;
+            margin-bottom: 25px;
+            font-size: 1.1em;
+            font-style: italic;
+            border-left: 5px solid #00bcd4;
+        }
+
+        /* 行程氣氛分析 */
+        #mood-analysis {
+            margin-bottom: 25px;
+            padding: 15px 20px;
+            background-color: #f3e5f5;
+            border-radius: 8px;
+            font-weight: bold;
+            border: 1px dashed #ce93d8;
+        }
+        #mood-analysis p { margin: 5px 0; }
+
+        /* 情緒備註樣式 */
+        .mood-note { 
+            font-weight: bold; 
+            color: #880e4f; 
+            margin-top: 8px; 
+            font-size: 0.95em; 
+            padding: 6px 0;
+            border-top: 1px dashed #f48fb1;
+            white-space: normal;
+        }
+
+        /* 新增：情緒反饋區 (代替日記按鈕) */
+        .feedback-container {
+            margin-top: 20px;
+            padding-top: 15px;
+            border-top: 1px solid #ccc;
+            background-color: #fafafa;
+            padding: 15px;
+            border-radius: 8px;
+        }
+        .feedback-container label { font-weight: bold; margin-right: 10px; }
+        .feedback-container input[type="text"] { 
+            width: calc(100% - 140px); 
+            display: inline-block;
+            padding: 8px;
+        }
+        .feedback-container select { 
+            width: 120px; 
+            padding: 8px;
+            display: inline-block;
+        }
+        .feedback-container div { margin-bottom: 10px; }
+
+        /* 最終情緒總結按鈕 */
+        #analyze-mood-btn {
+            width: 100%;
+            padding: 15px;
+            margin-top: 30px;
+            background-color: #4db6ac; /* 綠松石色 */
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 1.1em;
+            font-weight: bold;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+        #analyze-mood-btn:hover { background-color: #26a69a; }
+        #analyze-mood-btn:disabled { background-color: #ccc; cursor: not-allowed; }
+
+        /* 最終情緒分析結果區 */
+        #final-mood-summary {
+            margin-top: 20px;
+            padding: 25px;
+            background-color: #e8f5e9;
+            border: 2px solid #aed581;
+            border-radius: 10px;
+            font-size: 1.1em;
+            line-height: 1.6;
+            white-space: pre-wrap; /* 保留換行 */
+        }
+
+        .summary { margin-top: 20px; padding: 15px; background-color: #f8bbd0; border-left: 5px solid var(--main-color); font-weight: bold; color: #880e4f; border-radius: 6px; }
+        .final-cost { color: var(--main-color); margin-top: 30px; padding: 15px; border: 2px dashed var(--light-color); border-radius: 8px; text-align: center; }
+
+        /* 行程表優化區塊 */
+        .itinerary-table {
+            width: 100%;
+            border-collapse: collapse; /* 移除表格的邊界重疊 */
+            margin-top: 15px;
+            table-layout: fixed; /* 固定列寬 */
+        }
+
+        .itinerary-table th, .itinerary-table td {
+            padding: 12px 8px; /* 增加內邊距 */
+            text-align: left;
+            vertical-align: top;
+            font-size: 0.95em;
+        }
+
+        .itinerary-table thead th {
+            background-color: var(--light-color);
+            color: white;
+            font-weight: bold;
+            border-bottom: 3px solid var(--main-color);
+            position: sticky; /* 讓表頭在滾動時固定 */
+            top: 0;
+        }
+        
+        /* 增加行程項目之間的間隔與區隔線 */
+        .itinerary-table tbody tr {
+            /* 這是關鍵的間隔與視覺區隔 */
+            border-bottom: 8px solid var(--card-color); /* 模擬間距的粗底線 */
+            background-color: #ffffff; /* 讓項目底色獨立於 day-plan */
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05); /* 輕微陰影增加立體感 */
+        }
+        
+        /* 第一層 tr 是行程內容，第二層 tr 是地圖，我們只對行程內容 tr 增加間隔，且將地圖 tr 的背景設為和 day-plan 一樣 */
+        .itinerary-table tbody tr:nth-child(even) { /* 地圖那行，取消白底 */
+            background-color: var(--card-color);
+            border-bottom: 0;
+            padding-bottom: 0;
+            box-shadow: none;
+        }
+        
+        /* 移除最後一筆行程的底部間隔，讓它看起來更完整 */
+        .itinerary-table tbody tr:last-child {
+            border-bottom: none;
+        }
+        
+        /* 避免地圖上方的 tr 被底線擋住，但這裡的結構是 tr+tr，所以只對第一個 tr 做間隔就好 */
+        .itinerary-table tbody tr:nth-child(odd) td {
+            border-bottom: 1px solid #eee; /* 細緻的分隔線 */
+        }
+
+
+        .time-col { width: 80px; font-weight: bold; }
+        .duration-col { width: 100px; font-size: 0.85em; }
+        .transport-col { width: 80px; }
+        .cost-col { width: 100px; font-weight: bold; color: var(--main-color); }
+        .item-col { width: auto; } /* 讓項目佔用剩餘空間 */
+
+        .note-intro {
+            margin-top: 5px;
+            font-size: 0.9em;
+            color: #555;
+            line-height: 1.4;
+        }
+        
+        .image-btn {
+            display: inline-block;
+            margin-top: 5px;
+            padding: 3px 8px;
+            background-color: #ffe0b2;
+            color: #e65100;
+            border-radius: 4px;
+            text-decoration: none;
+            font-size: 0.8em;
+            font-weight: bold;
+        }
+        
+        /* 地圖樣式 */
+        .map-container {
+            width: 100%;
+            height: 250px;
+            margin-top: 10px;
+            overflow: hidden;
+            border-radius: 8px;
+            border: 1px solid #ddd;
+        }
+        .map-iframe {
+            width: 100%;
+            height: 100%;
+            border: none;
+        }
+
+
+        /* RWD 優化 */
+        @media (max-width: 900px) {
+            .itinerary-table, .table-wrapper {
+                display: block;
+                overflow-x: auto;
+                white-space: nowrap; /* 防止內容換行，讓表格可以水平捲動 */
+            }
+            .itinerary-table {
+                 min-width: 700px; /* 確保在小螢幕上至少有一定寬度 */
+            }
+        }
+        
+        @media (max-width: 600px) {
+            .feedback-container input[type="text"], .feedback-container select {
+                width: 100%;
+                margin-top: 5px;
+            }
+            .feedback-container input[type="text"] { margin-left: 0; }
+        }
+    </style>
 </head>
 <body>
+    <audio id="mood-audio" loop></audio>
 
-    <header class="header">
-        <h1>🌱 很遊SENSE嘛</h1>
-        <p>探索屬於你的柔和清新時光</p>
+    <header>
+        <h1>很有SENSE嘛~💖AI情緒旅伴規劃</h1>
     </header>
+    
+    <div class="container">
+        <div id="planner-form">
+            <div class="warning">
+                **🔑 Key 注意：您的 API Key 會在瀏覽器中暫存。**
+            </div>
+            
+            <label for="key-input" style="font-weight: bold;">Gemini API Key：</label>
+            <div id="key-input-group">
+                <input type="password" id="key-input" placeholder="請在此輸入您的 Gemini API Key">
+                <button id="validate-btn">驗證 Key</button>
+            </div>
+            <div id="key-status"></div>
 
-    <section id="api-config" class="card config-section">
-        <h2>🔑 API 密鑰設定</h2>
-        <div class="input-group">
-            <label for="gemini-api-key">Gemini API Key:</label>
-            <input type="password" id="gemini-api-key" placeholder="輸入您的密鑰">
-            <button id="verify-key-btn" class="soft-btn primary-btn">驗證並啟用</button>
+            <div id="input-fields">
+                <div>
+                    <label for="destination">旅遊地區 (國家/城市)：</label>
+                    <input type="text" id="destination" placeholder="例如：韓國首爾" value="東京">
+                </div>
+                <div>
+                    <label for="duration">旅遊天數：</label>
+                    <input type="number" id="duration" min="1" max="14" value="3">
+                </div>
+                <div>
+                    <label for="travelers">同行人數：</label>
+                    <input type="number" id="travelers" min="1" max="10" value="2">
+                </div>
+                <div>
+                    <label for="budget">預算等級：</label>
+                    <select id="budget">
+                        <option value="經濟">經濟</option>
+                        <option value="中等" selected>中等</option>
+                        <option value="奢華">奢華</option>
+                    </select>
+                </div>
+                <div>
+                    <label for="transport">主要交通方式：</label>
+                    <select id="transport">
+                        <option value="大眾運輸" selected>大眾運輸</option>
+                        <option value="租車">租車自駕</option>
+                        <option value="計程車/步行">計程車/步行</option>
+                    </select>
+                </div>
+                <div>
+                    <label for="current_mood">現在的心情如何？</label>
+                    <select id="current_mood">
+                        <option value="期待" selected>😀 期待/興奮</option>
+                        <option value="平靜">😌 平靜/療癒</option>
+                        <option value="疲憊">😴 疲憊/需要放鬆</option>
+                        <option value="探索">🧐 探索/好奇</option>
+                        <option value="孤單">😥 孤單/想被陪伴</option>
+                        <option value="開心">😄 快樂/活力</option>
+                    </select>
+                </div>
+            </div>
+
+            <label for="mood_theme" style="font-weight: bold;">旅遊主題/情境 (個人化情緒關鍵)：</label>
+            <input type="text" id="mood_theme" placeholder="例如：尋求療癒放鬆、浪漫情侶之旅、獨自探險挑戰" value="情侶浪漫放鬆">
+            
+            <label for="interests" style="font-weight: bold; margin-top: 10px; display: block;">額外需求/特殊興趣：</label>
+            <input type="text" id="interests" placeholder="例如：主打動漫景點、希望看夜景" value="希望安排一天下午在特色咖啡廳放空">
+
+
+            <button id="generate-btn" disabled>💖 為我生成專屬行程</button>
         </div>
-        <p id="api-status" class="status-message">狀態：未驗證</p>
-    </section>
 
-    <section id="context-interaction" class="card context-section hidden">
-        <h2>🧭 導覽助理通知</h2>
-        <div id="interaction-content">
-            <p id="context-message" class="assistant-message"></p>
-            <div id="user-response-area" class="response-area hidden">
-                </div>
+        <div id="itinerary-output">
+            <p>請輸入您的金鑰並點擊「驗證 Key」。</p>
         </div>
-    </section>
+        
+        <button id="analyze-mood-btn" style="display: none;">💡 點擊：總結我的旅程情緒回饋</button>
+        <div id="final-mood-summary"></div>
+    </div>
 
-    <main class="main-content">
+    <script type="module">
+        import { GoogleGenAI } from 'https://esm.run/@google/genai';
+        
+        let isKeyValid = false; 
+        let aiClient; 
+        let fullItineraryData = null; // 儲存完整的行程數據，以便最終分析使用
+        
+        // JSON Schema 保持不變 (因為只需要提取數據)
+        const ITINERARY_SCHEMA = {
+            type: "object",
+            properties: {
+                greeting: { type: "string" },
+                mood_analysis: { type: "object", properties: { relax: { type: "string" }, romantic: { type: "string" }, explore: { type: "string" } } },
+                days: {
+                    type: "array",
+                    items: {
+                        type: "object",
+                        properties: {
+                            day: { type: "string" },
+                            date: { type: "string" },
+                            items: {
+                                type: "array",
+                                items: {
+                                    type: "object",
+                                    properties: {
+                                        time: { type: "string" },
+                                        description: { type: "string" },
+                                        intro: { type: "string" }, 
+                                        mood_note: { type: "string" },
+                                        type: { type: "string", enum: ["景點", "餐食", "住宿", "活動"] },
+                                        location: { type: "string" }, 
+                                        transport: { type: "string" },
+                                        duration_activity: { type: "string" },
+                                        duration_travel: { type: "string" },
+                                        cost: { type: "integer" }
+                                    },
+                                    required: ["time", "description", "intro", "mood_note", "type", "location", "transport", "duration_activity", "duration_travel", "cost"]
+                                }
+                            }
+                        },
+                        required: ["day", "date", "items"]
+                    }
+                }
+            },
+            required: ["greeting", "mood_analysis", "days"]
+        };
 
-        <aside class="sidebar card">
-            <h2>🌍 旅遊規劃與地區選擇</h2>
+        // 情緒主題配置
+        const MOOD_CONFIG = {
+            '浪漫': { main_color: '#e91e63', light_color: '#ff80ab', background_color: '#fce4ec', card_color: '#fff8e1', audio_url: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3' },
+            '放鬆': { main_color: '#388e3c', light_color: '#aed581', background_color: '#f1f8e9', card_color: '#e8f5e9', audio_url: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-3.mp3' },
+            '探索': { main_color: '#1a237e', light_color: '#7986cb', background_color: '#e8eaf6', card_color: '#e3f2fd', audio_url: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-5.mp3' },
+            'default': { main_color: '#4CAF50', light_color: '#81c784', background_color: '#e8f5e9', card_color: '#f7fff7', audio_url: '' }
+        };
+
+        const MOOD_OPTIONS = [
+            { value: "開心", label: "😄 開心" },
+            { value: "療癒", label: "😌 療癒" },
+            { value: "疲憊", label: "😴 疲憊" },
+            { value: "探索", label: "🧐 探索" },
+            { value: "浪漫", label: "💞 浪漫" },
+            { value: "興奮", label: "🤩 興奮" },
+            { value: "孤單", label: "😥 孤單" },
+            { value: "平靜", label: "🧘 平靜" }
+        ];
+
+        function applyMoodTheme(moodTheme) {
+            const themeKey = Object.keys(MOOD_CONFIG).find(key => moodTheme.includes(key)) || 'default';
+            const config = MOOD_CONFIG[themeKey];
+            const root = document.documentElement.style;
+            const audio = document.getElementById('mood-audio');
             
-            <div class="tab-buttons">
-                <button id="show-region-btn" class="soft-btn secondary-btn half-width active" disabled>內建地區</button>
-                <button id="show-custom-btn" class="soft-btn secondary-btn half-width" disabled>自訂行程</button>
-            </div>
-            <hr>
-
-            <div id="region-menu-panel" class="menu-panel">
-                <div id="region-menu" class="menu-list">
-                    <h3>選擇內建地區：</h3>
-                    <button class="region-btn soft-btn active" data-region="taipei">台北都會</button>
-                    <button class="region-btn soft-btn" data-region="hualien">花蓮海岸</button>
-                    <button class="region-btn soft-btn" data-region="tainan">台南古都</button>
-                </div>
-            </div>
-
-            <div id="custom-plan-panel" class="menu-panel hidden">
-                <form id="custom-plan-form">
-                    <h3>✏️ 自訂旅遊行程</h3>
-                    <div class="input-group-vertical">
-                        <label for="travel-country">旅遊國家/地區:</label>
-                        <input type="text" id="travel-country" value="台灣" required>
-                    </div>
-                    <div class="input-group-vertical">
-                        <label for="travel-days">遊玩天數:</label>
-                        <input type="number" id="travel-days" value="3" min="1" required>
-                    </div>
-                    <div class="input-group-vertical">
-                        <label for="travel-style">旅遊風格:</label>
-                        <select id="travel-style" required>
-                            <option value="清新日常">清新日常</option>
-                            <option value="文化探索">文化探索</option>
-                            <option value="美食之旅">美食之旅</option>
-                            <option value="戶外冒險">戶外冒險</option>
-                        </select>
-                    </div>
-                    <div class="input-group-vertical">
-                        <label for="custom-spots">自訂景點 (選填，每行一個):</label>
-                        <textarea id="custom-spots" rows="4" placeholder="例如：台北市立動物園、貓空纜車"></textarea>
-                    </div>
-                    <button type="submit" id="generate-custom-btn" class="soft-btn primary-btn full-width" disabled>🤖 AI 生成專屬導覽</button>
-                </form>
-            </div>
+            root.setProperty('--main-color', config.main_color);
+            root.setProperty('--light-color', config.light_color);
+            root.setProperty('--background-color', config.background_color);
+            root.setProperty('--card-color', config.card_color);
             
-        </aside>
+            if (config.audio_url) {
+                audio.src = config.audio_url;
+                audio.volume = 0.3; 
+                audio.play().catch(e => console.log("Audio playback blocked:", e)); 
+            } else {
+                audio.pause();
+                audio.src = '';
+            }
+        }
 
-        <section class="content-display">
+        function setButtonState(btnId, isLoading, text) {
+            const btn = document.getElementById(btnId);
+            if (!btn) return;
+            btn.textContent = text;
+            btn.disabled = isLoading;
             
-            <div class="spot-map-container">
+            if (btnId === 'generate-btn' && !isLoading) {
+                btn.disabled = !isKeyValid;
+            }
+        }
+        
+        async function validateKey() {
+            const geminiApiKey = document.getElementById('key-input').value.trim();
+            
+            const keyStatusDiv = document.getElementById('key-status');
+            const generateBtn = document.getElementById('generate-btn');
+            
+            if (!geminiApiKey) {
+                keyStatusDiv.innerHTML = `<span style="color:red;">請輸入金鑰。</span>`;
+                isKeyValid = false;
+                generateBtn.disabled = true;
+                return;
+            }
+
+            setButtonState('validate-btn', true, '驗證中...');
+            keyStatusDiv.innerHTML = `<span style="color:#007bff;">正在連接 API...</span>`;
+            
+            try {
+                aiClient = new GoogleGenAI({ apiKey: geminiApiKey }); 
+                await aiClient.models.generateContent({
+                    model: 'gemini-2.5-flash',
+                    contents: 'Hello.', 
+                    config: { maxOutputTokens: 1 } 
+                });
                 
-                <div id="spot-list" class="spot-grid">
-                    <h2>🖼️ 本日推薦景點</h2>
-                    <p class="placeholder-text">⚠️ 請先在上方「API 密鑰設定」區塊完成驗證，才能選擇行程。</p>
-                </div>
+                keyStatusDiv.innerHTML = `<span style="color:green; font-weight:bold;">✅ Key 驗證成功！</span>`;
+                isKeyValid = true;
+                generateBtn.disabled = false; 
                 
-                <div id="map-container" class="map-container card">
-                    <h2>📍 景點位置與路徑</h2>
-                    <div id="map-display" class="map-display">
-                        <p class="map-placeholder">地圖功能載入中 (需 Google Maps API Key)</p>
+            } catch (error) {
+                console.error("Key 驗證失敗:", error);
+                let errorMsg = error.message.includes('401') ? "金鑰無效 (401 Unauthorized)。" : `連線失敗。錯誤訊息: ${error.message.substring(0, 50)}...`;
+                keyStatusDiv.innerHTML = `<span style="color:red;">❌ Key 驗證失敗。原因: ${errorMsg}</span>`;
+                isKeyValid = false;
+                generateBtn.disabled = true; 
+            } finally {
+                setButtonState('validate-btn', false, '驗證 Key');
+            }
+        }
+
+
+        // 函式：生成 Google 圖片搜尋連結
+        function generateImageSearchUrl(location) {
+            const encodedLocation = encodeURIComponent(location);
+            return `https://www.google.com/search?tbm=isch&q=${encodedLocation}`;
+        }
+        
+        // 函式：生成情緒選擇下拉選單
+        function generateMoodSelect(dayIndex) {
+            let options = MOOD_OPTIONS.map(mood => 
+                `<option value="${mood.value}">${mood.label}</option>`
+            ).join('');
+            
+            return `
+                <select class="day-mood-select" data-day-index="${dayIndex}">
+                    <option value="" disabled selected>選擇今日心情</option>
+                    ${options}
+                </select>
+            `;
+        }
+        
+        // 地圖嵌入函式
+        function generateMapEmbedUrl(location) {
+            const encodedLocation = encodeURIComponent(location);
+            return `https://maps.google.com/maps?q=${encodedLocation}&output=embed&z=14&hl=zh-TW`; 
+        }
+
+        // 主函式：生成行程
+        async function generateItinerary() {
+            const destination = document.getElementById('destination').value.trim();
+            const duration = document.getElementById('duration').value.trim();
+            const travelers = document.getElementById('travelers').value.trim();
+            const budget = document.getElementById('budget').value;
+            const transport = document.getElementById('transport').value;
+            const moodTheme = document.getElementById('mood_theme').value.trim();
+            const currentMood = document.getElementById('current_mood').value;
+            const interests = document.getElementById('interests').value.trim();
+            const outputDiv = document.getElementById('itinerary-output');
+            const analyzeBtn = document.getElementById('analyze-mood-btn');
+            
+            if (!isKeyValid || !aiClient) {
+                outputDiv.innerHTML = "<p style='color:red;'>請先驗證您的 Gemini API Key。</p>";
+                return;
+            }
+            if (!destination || !duration || !travelers || !moodTheme) {
+                outputDiv.innerHTML = "<p style='color:red;'>請輸入旅遊地區、天數、人數和旅遊主題。</p>";
+                return;
+            }
+
+            setButtonState('generate-btn', true, '生成中...');
+            analyzeBtn.style.display = 'none';
+            document.getElementById('final-mood-summary').innerHTML = '';
+            outputDiv.innerHTML = "<div class='loading'>正在呼叫 AI 規劃行程，請稍候...</div>";
+
+            try {
+                applyMoodTheme(moodTheme);
+
+                const prompt = `
+                你是一位專注於「個人化情緒價值」的旅遊規劃師。
+                使用者現在的心情是：「${currentMood}」，請在行程規劃和導語中微調語氣以體現關懷。
+                請嚴格遵守提供的 JSON Schema 格式輸出。
+
+                --- 旅遊需求細節 ---
+                1. 旅遊地區：${destination}
+                2. 旅遊天數：${duration} 天
+                3. 同行人數：${travelers} 人
+                4. **旅遊主題/情境：${moodTheme}**
+                5. 額外需求：${interests || '無'}
+                `;
+
+                const response = await aiClient.models.generateContent({
+                    model: 'gemini-2.5-flash',
+                    contents: prompt,
+                    config: {
+                        responseMimeType: "application/json",
+                        responseSchema: ITINERARY_SCHEMA,
+                        temperature: 0.85 
+                    }
+                });
+
+                fullItineraryData = JSON.parse(response.text);
+                const itineraryData = fullItineraryData.days;
+
+                // 渲染 HTML
+                let htmlContent = `<h2>✈️ 為您規劃的 ${destination} ${duration} 天 (${moodTheme}) 行程</h2>`;
+                
+                htmlContent += `<div id="ai-greeting">**AI 旅伴導語：** ${fullItineraryData.greeting}</div>`;
+
+                const analysis = fullItineraryData.mood_analysis;
+                htmlContent += `
+                    <div id="mood-analysis">
+                        **行程氣氛分析 (情緒色彩比例):**
+                        <p>🌼 放鬆：${analysis.relax || 'N/A'}</p>
+                        <p>💞 浪漫：${analysis.romantic || 'N/A'}</p>
+                        <p>🗺️ 探索：${analysis.explore || 'N/A'}</p>
                     </div>
-                    <div class="map-actions">
-                        <button id="generate-path-btn" class="soft-btn primary-btn" disabled>🗺️ 生成路徑規劃</button>
-                    </div>
-                </div>
+                `;
 
-            </div>
+                let overallTotalCost = 0;
 
-            <div id="spot-detail" class="card hidden">
-                <h2 id="detail-title">景點詳細介紹</h2>
-                <div id="detail-image" class="detail-image">
-                    <img src="" alt="景點圖片" class="hidden">
-                </div>
-                <div id="detail-content">
-                    <p>點擊景點卡片查看詳細資訊。</p>
-                </div>
-                <div id="detail-coords"></div>
-            </div>
+                itineraryData.forEach((dayPlan, dayIndex) => {
+                    let totalCost = 0;
+                    let dailyHtml = '';
+                    
+                    dayPlan.items.forEach(item => {
+                        const costValue = parseInt(item.cost) || 0; 
+                        totalCost += costValue;
+                        overallTotalCost += costValue;
+                        const mapLink = generateMapEmbedUrl(item.location); 
+                        const imageLink = generateImageSearchUrl(item.location); 
 
-        </section>
+                        dailyHtml += `
+                            <tr>
+                                <td class="time-col">${item.time}</td>
+                                <td class="duration-col">
+                                    活動: ${item.duration_activity}<br>
+                                    <span style="color:#d32f2f;">交通: ${item.duration_travel}</span>
+                                </td>
+                                <td class="item-col">
+                                    <strong>[${item.type}]</strong> ${item.description}<br>
+                                    <div class="mood-note">✨ **情感備註：** ${item.mood_note}</div>
+                                    <div class="note-intro">**介紹：** ${item.intro}</div>
+                                    <small>地點：${item.location}</small>
+                                    
+                                    <a class="image-btn" 
+                                        href="${imageLink}"
+                                        target="_blank"
+                                        title="點擊查看該地點的圖片">
+                                        📸 圖片參考
+                                    </a>
+                                </td>
+                                <td class="transport-col">${item.transport}</td>
+                                <td class="cost-col">$${costValue}</td>
+                            </tr>
+                            <tr>
+                                <td colspan="5" style="padding-top: 0;">
+                                    <div class="map-container">
+                                        <iframe class="map-iframe" 
+                                                    loading="lazy"
+                                                    src="${mapLink}" 
+                                                    allowfullscreen>
+                                        </iframe>
+                                    </div>
+                                </td>
+                            </tr>
+                        `;
+                    });
 
-    </main>
 
-    <script src="script.js"></script>
+                    htmlContent += `
+                        <div class="day-plan">
+                            <h3 id="day-title-${dayIndex}">${dayPlan.day} - ${dayPlan.date}</h3>
+                            <div class="table-wrapper">
+                                <table class="itinerary-table">
+                                    <thead>
+                                        <tr>
+                                            <th class="time-col">開始時間</th>
+                                            <th class="duration-col">預估時長</th>
+                                            <th class="item-col">項目 (類型/情緒)</th>
+                                            <th class="transport-col">交通</th>
+                                            <th class="cost-col">預估金額 (TWD)</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        ${dailyHtml}
+                                    </tbody>
+                                </table>
+                            </div>
+                            <div class="summary">
+                                當日總預估花費：$${totalCost} TWD
+                            </div>
+                            
+                            <div class="feedback-container" data-day-index="${dayIndex}">
+                                <div>
+                                    <label for="mood-select-${dayIndex}">今日感受：</label>
+                                    ${generateMoodSelect(dayIndex)}
+                                </div>
+                                <div>
+                                    <label for="sentence-input-${dayIndex}">一句話記錄：</label>
+                                    <input type="text" id="sentence-input-${dayIndex}" placeholder="例如：在居酒屋的熱鬧氣氛讓我感到很滿足" class="day-sentence-input" data-day-index="${dayIndex}">
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                });
 
+                htmlContent += `<h2 class="final-cost">💖 總預估花費 (供 ${travelers} 人參考)：$${overallTotalCost} TWD</h2>`;
+
+                outputDiv.innerHTML = htmlContent;
+                analyzeBtn.style.display = 'block'; // 顯示最終分析按鈕
+
+            } catch (error) {
+                console.error("生成行程時發生錯誤:", error);
+                
+                let errorMsg = error.message.includes('Unexpected token') || error.message.includes('JSON') ?
+                    '行程生成失敗。AI 回傳的 JSON 格式不正確。請嘗試簡化您的需求或檢查 Key 狀態。' :
+                    `行程生成失敗。錯誤訊息：${error.message}`;
+                
+                outputDiv.innerHTML = `<p style='color:red;'>${errorMsg}</p>`;
+            } finally {
+                setButtonState('generate-btn', false, '💖 為我生成充滿情緒價值的專屬行程');
+            }
+        }
+
+
+        /**
+         * 最終 AI 分析功能
+         */
+        async function analyzeFinalMood() {
+            const analyzeBtn = document.getElementById('analyze-mood-btn');
+            const summaryDiv = document.getElementById('final-mood-summary');
+            
+            if (!fullItineraryData) {
+                summaryDiv.innerHTML = '<p style="color:red;">請先生成行程！</p>';
+                return;
+            }
+
+            setButtonState('analyze-mood-btn', true, 'AI 正在分析您的情緒軌跡...');
+            summaryDiv.innerHTML = '<div class="loading">正在整合您的每日反饋，請稍候...</div>';
+
+            // 收集所有使用者的反饋
+            const userFeedbacks = [];
+            const dayPlans = fullItineraryData.days;
+            
+            dayPlans.forEach((dayPlan, index) => {
+                const moodSelect = document.querySelector(`.day-mood-select[data-day-index="${index}"]`);
+                const sentenceInput = document.querySelector(`.day-sentence-input[data-day-index="${index}"]`);
+                const dayTitle = document.getElementById(`day-title-${index}`).textContent;
+                
+                const selectedMood = moodSelect ? moodSelect.value : '未選擇';
+                const inputSentence = sentenceInput ? sentenceInput.value.trim() : '無記錄';
+
+                userFeedbacks.push({
+                    day: dayTitle,
+                    mood: selectedMood,
+                    sentence: inputSentence,
+                    ai_mood_note: dayPlan.items.map(item => item.mood_note).join('; ')
+                });
+            });
+
+            // 準備 AI Prompt
+            const moodTheme = document.getElementById('mood_theme').value.trim();
+            const travelers = document.getElementById('travelers').value.trim();
+
+            const prompt = `
+            你是一位深度情緒旅遊分析師。我（們）的旅遊主題是「${moodTheme}」，同行人數為 ${travelers} 人。
+            以下是行程中的 AI 預設情緒備註（ai_mood_note）以及我（們）的每日情緒反饋（mood 和 sentence）。
+            
+            --- 每日情緒紀錄 ---
+            ${userFeedbacks.map(f => 
+                `[${f.day}]\n  - 我的感受：${f.mood}。我的記錄："${f.sentence}"。\n  - AI 預設：${f.ai_mood_note}`
+            ).join('\n')}
+            ---
+            
+            請根據這些紀錄，提供一段深度情緒價值回饋：
+            1. **整體情緒軌跡分析：** 簡要描述我的情緒如何隨著旅程發展。
+            2. **預期與實際差異：** 分析 AI 預設的情緒（ai_mood_note）和我實際感受（mood/sentence）的異同。
+            3. **結論情緒價值：** 總結這趟旅程帶給我的最重要情緒價值（例如：找到了平靜、愛情得到升華、戰勝了疲憊等），並用一句溫暖的話作為結束。
+            
+            請使用清晰的段落，並避免使用 JSON 格式。
+            `;
+
+            try {
+                const response = await aiClient.models.generateContent({
+                    model: 'gemini-2.5-flash',
+                    contents: prompt,
+                    config: { temperature: 0.7 }
+                });
+
+                summaryDiv.innerHTML = `
+                    <h3>💖 您的旅程情緒總結：</h3>
+                    <div style="white-space: pre-wrap;">${response.text.trim()}</div>
+                `;
+
+            } catch (error) {
+                console.error("最終情緒分析失敗:", error);
+                summaryDiv.innerHTML = '<p style="color:red;">最終情緒分析失敗。請檢查 Key 狀態或網路連線。</p>';
+            } finally {
+                setButtonState('analyze-mood-btn', false, '💡 點擊：總結我的旅程情緒與價值回饋');
+            }
+        }
+
+
+        // 事件監聽器
+        document.addEventListener('DOMContentLoaded', () => {
+            document.getElementById('validate-btn').addEventListener('click', validateKey);
+            document.getElementById('generate-btn').addEventListener('click', generateItinerary);
+            document.getElementById('analyze-mood-btn').addEventListener('click', analyzeFinalMood);
+            
+            // 監聽 Key 輸入框，一旦修改就重置驗證狀態
+            document.getElementById('key-input').addEventListener('input', () => {
+                isKeyValid = false;
+                document.getElementById('generate-btn').disabled = true;
+                document.getElementById('key-status').innerHTML = '';
+                document.getElementById('itinerary-output').innerHTML = '<p>請重新驗證您的 Key。</p>';
+                document.getElementById('analyze-mood-btn').style.display = 'none';
+                document.getElementById('final-mood-summary').innerHTML = '';
+                document.getElementById('mood-audio').pause();
+            });
+            
+            // 讓使用者輸入欄位一修改就要求重新生成
+             document.querySelectorAll('#input-fields input, #input-fields select, #mood_theme, #interests').forEach(input => {
+                input.addEventListener('input', () => {
+                    document.getElementById('itinerary-output').innerHTML = '<p>請點擊按鈕來重新規劃。</p>';
+                    document.getElementById('analyze-mood-btn').style.display = 'none';
+                    document.getElementById('final-mood-summary').innerHTML = '';
+                });
+            });
+
+            // 初始載入時，根據預設主題應用顏色和音效
+            applyMoodTheme(document.getElementById('mood_theme').value);
+        });
+    </script>
 </body>
 </html>
