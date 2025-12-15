@@ -438,6 +438,19 @@
             .assistant-header { font-size: 0.95em; }
             .itinerary-table th, .itinerary-table td { font-size: 0.9em; }
         }
+        .theme-rec-item {
+            cursor: pointer;
+            border: 1px solid var(--border-color, #ddd);
+            background: var(--light-color, #f7f7fb);
+            transition: transform 140ms, box-shadow 140ms, border-color 140ms, background 140ms;
+        }
+        .theme-rec-item.selected {
+            background: var(--accent-color, #6200EE);
+            color: #fff;
+            border-color: var(--accent-color, #6200EE);
+            transform: translateY(-1px);
+            box-shadow: 0 0 0 2px rgba(98,0,238,0.2);
+        }
     </style>
 </head>
 <body>
@@ -513,6 +526,20 @@
             <label for="interests" style="font-weight: bold; margin-top: 10px; display: block;">額外需求/特殊興趣：</label>
             <input type="text" id="interests" placeholder="例如：主打動漫景點、希望看夜景" value="希望安排一天下午在特色咖啡廳放空">
 
+            <div id="date-mode-fields" style="margin-top:10px;">
+                <label style="font-weight: bold;">開始日期：</label>
+                <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap:10px; margin-top:6px;">
+                    <select id="date_mode">
+                        <option value="tomorrow" selected>說走就走（隔天）</option>
+                        <option value="random">隨機日期</option>
+                        <option value="specific">指定日期</option>
+                    </select>
+                    <div id="start-date-wrap">
+                        <input type="date" id="start_date">
+                    </div>
+                </div>
+            </div>
+
 
             <button id="generate-btn" disabled>💖 為我生成專屬行程</button>
         </div>
@@ -552,6 +579,23 @@
                     <button id="wheel-apply" class="tools-btn" disabled>✨ 套用到旅遊地區</button>
                 </div>
                 <div id="wheel-list" style="margin-top:10px;"></div>
+            </div>
+            <div class="day-plan" style="margin-top:16px;">
+                <h3>主題推薦</h3>
+                <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap:8px;">
+                    <label><input type="checkbox" class="theme-check" value="休閒度假"> 休閒度假</label>
+                    <label><input type="checkbox" class="theme-check" value="文化探索"> 文化探索</label>
+                    <label><input type="checkbox" class="theme-check" value="神秘險冒"> 神秘險冒</label>
+                    <label><input type="checkbox" class="theme-check" value="放鬆療育"> 放鬆療育</label>
+                    <label><input type="checkbox" class="theme-check" value="美食/老饕之旅"> 美食/老饕之旅</label>
+                    <label><input type="checkbox" class="theme-check" value="健康/養生之旅"> 健康/養生之旅</label>
+                    <label><input type="checkbox" class="theme-check" value="學習/考察"> 學習/考察</label>
+                    <label><input type="checkbox" class="theme-check" value="運動旅遊"> 運動旅遊</label>
+                </div>
+                <div style="margin-top:10px;">
+                    <button id="btn-theme-recommend" class="next-day-btn">🔎 根據主題推薦目的地</button>
+                </div>
+                <div id="theme-recommend-result" style="margin-top:10px;"></div>
             </div>
         </div>
         <div id="page-playground" style="display:none;">
@@ -618,9 +662,43 @@
     <script>
         
         let isKeyValid = false; 
+        let validatedApiKey = '';
+        let userDiaryLogs = [];
         let aiClient; 
         let GoogleGenAICtor = null;
         let CURRENT_MODEL = 'gemini-2.5-flash';
+        let lastThemeRecommendations = [];
+        let lastSelectedThemes = [];
+        let selectedThemeRegion = '';
+        let FAST_ADJUST_NEXT = true;
+        let LOCAL_FAST_ADJUST = true;
+        function saveDiaryForDay(di, parentEl) {
+            if (isNaN(di)) return;
+            const moodSelect = document.querySelector(`.day-mood-select[data-day-index="${di}"]`);
+            const sentenceInput = document.querySelector(`.day-sentence-input[data-day-index="${di}"]`);
+            const selectedMood = moodSelect ? moodSelect.value : '';
+            const inputSentence = sentenceInput ? sentenceInput.value.trim() : '';
+            const existing = userDiaryLogs.find(x => x.dayIndex === di);
+            const payload = { dayIndex: di, mood: selectedMood, sentence: inputSentence, savedAt: Date.now() };
+            if (existing) {
+                existing.mood = payload.mood;
+                existing.sentence = payload.sentence;
+                existing.savedAt = payload.savedAt;
+            } else {
+                userDiaryLogs.push(payload);
+            }
+            const toastParent = parentEl || document.getElementById('scheduler-output') || document.getElementById('itinerary-output');
+            if (toastParent) {
+                const toast = document.createElement('div');
+                toast.className = 'summary';
+                toast.textContent = '✅ 已儲存今日日記';
+                toastParent.appendChild(toast);
+                setTimeout(()=>{ try { toastParent.removeChild(toast); } catch {} }, 1200);
+            }
+            if (fullItineraryData && fullItineraryData.days && di === fullItineraryData.days.length - 1) {
+                setTimeout(()=>{ try { analyzeFinalMood(); } catch {} }, 200);
+            }
+        }
         async function loadGenAI() {
             if (GoogleGenAICtor) return GoogleGenAICtor;
             try {
@@ -635,6 +713,17 @@
         let visitedLocations = new Set();
         let visitedDescriptions = new Set();
         function normalizeText(s) { return (s || '').trim().toLowerCase(); }
+        function sanitizeApiKey(s) {
+            let str = String(s || '');
+            str = str.replace(/[\u200B-\u200D\uFEFF]/g, ''); 
+            str = str.replace(/[`"‘’“”]/g, ''); 
+            const asciiOnly = str.replace(/[^\x00-\x7F]/g, '');
+            const kept = asciiOnly.match(/[A-Za-z0-9_\-]+/g);
+            return kept ? kept.join('') : '';
+        }
+        function isLikelyGeminiKey(s) {
+            return /^AIza[0-9A-Za-z_\-]{20,}$/.test(String(s||''));
+        }
         function collectVisited(items) {
             items.forEach(it => {
                 visitedLocations.add(normalizeText(it.location));
@@ -764,7 +853,8 @@
         }
         
         async function validateKey() {
-            const geminiApiKey = document.getElementById('key-input').value.trim();
+            const rawKey = document.getElementById('key-input').value.trim();
+            const geminiApiKey = sanitizeApiKey(rawKey);
             
             const keyStatusDiv = document.getElementById('key-status');
             const generateBtn = document.getElementById('generate-btn');
@@ -774,6 +864,14 @@
                 isKeyValid = false;
                 generateBtn.disabled = true;
                 return;
+            }
+            if (geminiApiKey !== rawKey) {
+                const ki = document.getElementById('key-input');
+                if (ki) ki.value = geminiApiKey;
+                keyStatusDiv.innerHTML = `<span style="color:#ff9800;">已自動清理不合法字元，重新驗證中...</span>`;
+            }
+            if (!isLikelyGeminiKey(geminiApiKey)) {
+                keyStatusDiv.innerHTML = `<span style="color:#ff9800;">注意：這看起來不像有效的 Google AI Studio Key（通常以 AIza 開頭）。仍嘗試驗證中...</span>`;
             }
 
             if (!navigator.onLine) {
@@ -798,6 +896,7 @@
                 
                 keyStatusDiv.innerHTML = `<span style="color:green; font-weight:bold;">✅ Key 驗證成功！</span>`;
                 isKeyValid = true;
+                validatedApiKey = geminiApiKey;
                 generateBtn.disabled = false; 
                 
             } catch (error) {
@@ -810,10 +909,14 @@
                     display = "已達此模型的限額 (429)，請稍後再試。";
                 } else if (/UNAVAILABLE|overloaded/i.test(msg)) {
                     display = "系統忙碌，請稍後再試。";
+                } else if (/ISO-8859-1|append on 'Headers'/i.test(msg)) {
+                    display = "金鑰包含非 ASCII 字元，請重新複製純文字金鑰並重試。";
+                } else if (/API key not valid|API_KEY_INVALID|code\":400/i.test(msg)) {
+                    display = "API Key 不正確或未開通。請於 Google AI Studio 取得正確金鑰（通常以 AIza 開頭），並確認已啟用 Generative Language API。";
                 } else {
                     display = `連線失敗。錯誤訊息: ${msg.substring(0, 80)}…`;
                 }
-                keyStatusDiv.innerHTML = `<span style="color:red;">❌ Key 驗證失敗。原因: ${display}</span>`;
+                keyStatusDiv.innerHTML = `<span style="color:red;">❌ Key 驗證失敗。原因: ${display} <a href="https://ai.google.dev/" target="_blank">取得金鑰說明</a></span>`;
                 isKeyValid = false;
                 generateBtn.disabled = true; 
             } finally {
@@ -902,7 +1005,8 @@
                 idx++; count++;
                 if (count >= cycles) {
                     clearInterval(timer);
-                    const pick = chips[(idx - 1) % chips.length]?.dataset.name || pool[Math.floor(Math.random() * pool.length)];
+                    const lastChip = chips[(idx - 1) % chips.length];
+                    const pick = (lastChip && lastChip.dataset && lastChip.dataset.name) ? lastChip.dataset.name : pool[Math.floor(Math.random() * pool.length)];
                     lastWheelPick = pick;
                     slot.textContent = `抽到：${pick} ✨`;
                     slot.style.transform = 'scale(1.05)';
@@ -931,8 +1035,147 @@
             box.style.transform = 'translateY(-1px)';
             setTimeout(()=>box.style.transform='translateY(0)', 120);
         }
+        const THEME_MAP = {
+            '休閒度假': [
+                {region:'沖繩',reason:'海島氛圍與沙灘度假'},
+                {region:'峇里島',reason:'Villa 與海邊度假'},
+                {region:'普吉島',reason:'海島活動與度假村'},
+                {region:'宜蘭',reason:'慢步小旅行與田野風光'},
+                {region:'輕井澤',reason:'高原度假空氣與慢生活'},
+                {region:'夏威夷',reason:'海灘度假與海上活動'},
+                {region:'濟州',reason:'火山島海岸與慢活'},
+                {region:'清邁',reason:'山城慢旅與泳池度假'}
+            ],
+            '文化探索': [
+                {region:'京都',reason:'寺社與歷史街區'},
+                {region:'羅馬',reason:'古蹟與博物館'},
+                {region:'台南',reason:'老城文化與巷弄'},
+                {region:'布拉格',reason:'中古城風貌與文化底蘊'},
+                {region:'西安',reason:'古都遺跡與歷史脈絡'}
+            ],
+            '神秘險冒': [
+                {region:'冰島',reason:'火山冰川奇景'},
+                {region:'秘魯',reason:'印加古文明與健行'},
+                {region:'尼泊爾',reason:'喜馬拉雅登山體驗'},
+                {region:'摩洛哥',reason:'沙漠秘境與市集探險'},
+                {region:'紐西蘭',reason:'峽灣健行與戶外冒險'}
+            ],
+            '放鬆療育': [
+                {region:'箱根',reason:'溫泉與山林靜謐'},
+                {region:'宜蘭',reason:'慢活田園與溫泉'},
+                {region:'輕井澤',reason:'森林與度假空氣'},
+                {region:'沖繩',reason:'海風與慢步海岸'},
+                {region:'花蓮',reason:'海岸山脈與療癒步道'},
+                {region:'富士河口湖',reason:'湖畔散步與山景靜心'}
+            ],
+            '美食/老饕之旅': [
+                {region:'台北',reason:'多元街頭美食'},
+                {region:'東京',reason:'尖端餐廳與街食'},
+                {region:'曼谷',reason:'夜市與泰菜'},
+                {region:'香港',reason:'粵菜與點心'},
+                {region:'台南',reason:'小吃文化與巷弄美味'},
+                {region:'大阪',reason:'庶民美食與名物'},
+                {region:'台中',reason:'創意料理與咖啡館'}
+            ],
+            '健康/養生之旅': [
+                {region:'草津',reason:'藥湯溫泉養生'},
+                {region:'礁溪',reason:'溫泉與健走步道'},
+                {region:'巴登巴登',reason:'歐洲療養溫泉'},
+                {region:'長野',reason:'森林步道與溫泉修養'},
+                {region:'南投',reason:'森林浴與溫泉旅宿'}
+            ],
+            '學習/考察': [
+                {region:'新加坡',reason:'治理與科技參訪'},
+                {region:'東京',reason:'產業與設計考察'},
+                {region:'波士頓',reason:'教育與學術氛圍'},
+                {region:'首爾',reason:'城市更新與文化創意'}
+            ],
+            '運動旅遊': [
+                {region:'北海道',reason:'滑雪與雪景'},
+                {region:'瑞士阿爾卑斯',reason:'健行與滑雪'},
+                {region:'長野',reason:'山地運動與溫泉'},
+                {region:'草津',reason:'滑雪場近、運動後溫泉恢復'}
+            ]
+        };
+        function recommendByThemes() {
+            const checks = Array.from(document.querySelectorAll('.theme-check:checked')).map(x=>x.value);
+            const out = document.getElementById('theme-recommend-result');
+            if (checks.length === 0) {
+                out.innerHTML = '<div class="summary">請至少選擇一個主題</div>';
+                return;
+            }
+            const score = new Map();
+            const reasons = {};
+            checks.forEach(t => {
+                const arr = THEME_MAP[t] || [];
+                arr.forEach(it => {
+                    const k = it.region;
+                    score.set(k, (score.get(k)||0) + 1);
+                    if (!reasons[k]) reasons[k] = [];
+                    reasons[k].push(`【${t}】${it.reason}`);
+                });
+            });
+            const weighted = [];
+            Object.keys(reasons).forEach(k => {
+                const s = score.get(k) || 1;
+                for (let i=0;i<s;i++) weighted.push(k);
+            });
+            for (let i = weighted.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                const tmp = weighted[i]; weighted[i] = weighted[j]; weighted[j] = tmp;
+            }
+            const picked = new Set();
+            const sampleCount = Math.min(6, Object.keys(reasons).length);
+            const result = [];
+            for (let i=0; i<weighted.length && result.length < sampleCount; i++) {
+                const k = weighted[i];
+                if (!picked.has(k)) {
+                    picked.add(k);
+                    result.push(k);
+                }
+            }
+            lastThemeRecommendations = result.slice();
+            lastSelectedThemes = checks.slice();
+            selectedThemeRegion = '';
+            let html = '';
+            result.forEach(region => {
+                const rs = (reasons[region]||[]).slice(0,2).join('；');
+                html += `<div class="summary"><button class="tools-btn theme-rec-item" data-region="${region}">${region}</button><br>${rs || '綜合契合度較高'}</div>`;
+            });
+            if (!html) {
+                out.innerHTML = '<div class="summary">暫無推薦</div>';
+            } else {
+                out.innerHTML = html + `<div style="margin-top:8px; display:flex; gap:8px; align-items:center;">
+                    <div id="theme-selected-status" class="summary" style="margin:0;">尚未選擇</div>
+                    <button id="theme-apply-destination" class="tools-btn">✨ 套用到旅遊地區</button>
+                    <button id="theme-apply-mood" class="tools-btn">🎨 套用到主題</button>
+                </div>`;
+            }
+        }
+        function applyThemeDestination() {
+            const pick = selectedThemeRegion || (lastThemeRecommendations && lastThemeRecommendations[0]) || '';
+            if (!pick) return;
+            const dest = document.getElementById('destination');
+            if (dest) {
+                dest.value = pick;
+                switchPage('page-planner');
+                dest.style.transform = 'scale(1.03)';
+                setTimeout(()=>dest.style.transform='scale(1)', 160);
+            }
+        }
+        function applyThemeMood() {
+            const themes = lastSelectedThemes && lastSelectedThemes.length ? lastSelectedThemes : Array.from(document.querySelectorAll('.theme-check:checked')).map(x=>x.value);
+            if (!themes || themes.length === 0) return;
+            const mood = document.getElementById('mood_theme');
+            if (mood) {
+                mood.value = themes.join('、');
+                switchPage('page-planner');
+                mood.style.transform = 'scale(1.03)';
+                setTimeout(()=>mood.style.transform='scale(1)', 160);
+            }
+        }
         function switchPage(pageId) {
-            ['page-planner','page-wheel','page-playground'].forEach(id => {
+            ['page-planner','page-wheel','page-playground','page-scheduler'].forEach(id => {
                 const el = document.getElementById(id);
                 if (!el) return;
                 el.style.display = id === pageId ? 'block' : 'none';
@@ -1281,6 +1524,126 @@
             const encodedLocation = encodeURIComponent(location);
             return `https://maps.google.com/maps?q=${encodedLocation}&output=embed&z=14&hl=zh-TW`; 
         }
+        // 日期輔助函式
+        function formatDate(dt) {
+            var Y = dt.getFullYear();
+            var M = String(dt.getMonth() + 1).padStart(2, '0');
+            var D = String(dt.getDate()).padStart(2, '0');
+            return Y + '-' + M + '-' + D;
+        }
+        function addDays(dateObj, days) {
+            var dt = new Date(dateObj.getTime());
+            dt.setDate(dt.getDate() + days);
+            return dt;
+        }
+        function pickRandomFutureDate(rangeDays) {
+            var r = typeof rangeDays === 'number' ? rangeDays : 90;
+            var base = new Date();
+            var offset = Math.floor(Math.random() * Math.max(2, r)) + 1;
+            return addDays(base, offset);
+        }
+        function computeStartDate() {
+            var modeEl = document.getElementById('date_mode');
+            var mode = modeEl ? modeEl.value : 'tomorrow';
+            if (mode === 'tomorrow') {
+                var b1 = new Date();
+                return addDays(b1, 1);
+            }
+            if (mode === 'random') {
+                return pickRandomFutureDate(90);
+            }
+            if (mode === 'specific') {
+                var sd = document.getElementById('start_date');
+                var val = sd ? sd.value : '';
+                if (!val) return null;
+                var dt = parseDateValue(val);
+                return dt;
+            }
+            var base = new Date();
+            return addDays(base, 1);
+        }
+        // 從一句話記錄中推測隔天開始時間（簡單中文/數字規則）
+        function deriveStartTimeFromText(text) {
+            var s = String(text || '').toLowerCase();
+            var m;
+            m = s.match(/(\d{1,2})\s*(?:[:：](\d{2}))?\s*(?:點|時)/);
+            if (m) {
+                var hh = parseInt(m[1], 10);
+                var mm = m[2] ? m[2] : '00';
+                if (hh >= 0 && hh <= 23) return String(hh).padStart(2,'0') + ':' + mm;
+            }
+            m = s.match(/(\d{1,2})\s*(am|pm)/);
+            if (m) {
+                var hh2 = parseInt(m[1], 10);
+                var ampm = m[2];
+                if (ampm === 'pm' && hh2 < 12) hh2 += 12;
+                if (ampm === 'am' && hh2 === 12) hh2 = 0;
+                return String(hh2).padStart(2,'0') + ':00';
+            }
+            if (s.includes('晚起') || s.includes('太累') || s.includes('睡到') || s.includes('晚一點開始')) {
+                return '11:00';
+            }
+            return null;
+        }
+        function parseTimeToMinutes(t) {
+            var m = String(t || '').match(/(\d{1,2}):(\d{2})/);
+            if (!m) return null;
+            var h = parseInt(m[1],10);
+            var mi = parseInt(m[2],10);
+            if (isNaN(h) || isNaN(mi)) return null;
+            return h*60 + mi;
+        }
+        function formatMinutesToTime(mins) {
+            var m = Math.max(0, mins|0);
+            var h = Math.floor(m/60)%24;
+            var mi = m%60;
+            return String(h).padStart(2,'0') + ':' + String(mi).padStart(2,'0');
+        }
+        function shiftDayStart(dayPlan, startTimeStr) {
+            if (!startTimeStr) return dayPlan;
+            var minStart = parseTimeToMinutes(startTimeStr);
+            if (minStart == null || !dayPlan || !dayPlan.items || !dayPlan.items.length) return dayPlan;
+            var first = parseTimeToMinutes(dayPlan.items[0].time);
+            if (first == null) return dayPlan;
+            if (first < minStart) {
+                var delta = minStart - first;
+                dayPlan.items.forEach(function(it){
+                    var mm = parseTimeToMinutes(it.time);
+                    if (mm != null) it.time = formatMinutesToTime(mm + delta);
+                });
+            }
+            return dayPlan;
+        }
+        function ensureRestBreak(dayPlan, mood, sentence, startTimeStr, destination) {
+            var tired = String(mood || '').includes('疲') || String(sentence || '').includes('累') || String(sentence || '').includes('休息') || String(sentence || '').includes('睡');
+            if (!tired) return dayPlan;
+            if (!dayPlan || !dayPlan.items) return dayPlan;
+            var firstTime = startTimeStr || (dayPlan.items[0] ? dayPlan.items[0].time : '11:00');
+            var m = parseTimeToMinutes(firstTime);
+            var insertTime = formatMinutesToTime((m != null ? m : 660) + 30);
+            var hasRest = dayPlan.items.some(function(it){ return String(it.description||'').includes('休息') || String(it.type||'')==='餐食'; });
+            if (!hasRest) {
+                var restItem = {
+                    time: insertTime,
+                    description: '咖啡館休息與早午餐',
+                    intro: '以輕鬆步調開始一天，補充能量並放鬆身心。',
+                    mood_note: '舒緩疲憊、放慢節奏，讓身心恢復。',
+                    type: '餐食',
+                    location: destination || '市中心咖啡館',
+                    transport: '步行',
+                    duration_activity: '60分鐘',
+                    duration_travel: '10分鐘',
+                    cost: 300
+                };
+                dayPlan.items.unshift(restItem);
+            }
+            return dayPlan;
+        }
+        function adjustDayPlanByMood(dayPlan, diaryMood, diarySentence, startTimeStr, destination) {
+            var adjusted = shiftDayStart(dayPlan, startTimeStr);
+            adjusted = ensureRestBreak(adjusted, diaryMood, diarySentence, startTimeStr, destination);
+            return adjusted;
+        }
         function computeMeterAdvice(r, h, e) {
             const top = [['浪漫', r], ['療癒', h], ['探索', e]].sort((a,b)=>b[1]-a[1])[0][0];
             if (top === '浪漫') return '今天以浪漫為核心，安排慢步、夜景與共享甜點。';
@@ -1445,6 +1808,11 @@
                 const tb = document.getElementById('tools-bar');
                 if (tb) tb.style.display = 'flex';
                 renderDestinationCards();
+                // 追加每天的儲存日記按鈕
+                const fc = document.querySelector('.feedback-container[data-day-index="0"]');
+                if (fc) {
+                    fc.insertAdjacentHTML('beforeend', `<button class="tools-btn btn-save-diary" data-day-index="0">📝 儲存今日日記</button>`);
+                }
 
             } catch (error) {
                 console.error("生成行程時發生錯誤:", error);
@@ -1478,10 +1846,117 @@
             try {
                 const moodSelect = document.querySelector(`.day-mood-select[data-day-index="${prevDayIndex}"]`);
                 const sentenceInput = document.querySelector(`.day-sentence-input[data-day-index="${prevDayIndex}"]`);
-                const diaryMood = moodSelect ? moodSelect.value : '';
-                const diarySentence = sentenceInput ? sentenceInput.value.trim() : '';
+                const savedLog = userDiaryLogs.find(x => x.dayIndex === prevDayIndex);
+                const diaryMood = savedLog ? (savedLog.mood || '') : (moodSelect ? moodSelect.value : '');
+                const diarySentence = savedLog ? (String(savedLog.sentence || '').trim()) : (sentenceInput ? sentenceInput.value.trim() : '');
+                const dayIndex = prevDayIndex + 1;
+                const startTime = deriveStartTimeFromText(diarySentence);
+                const originalNext = (fullItineraryData && fullItineraryData.days && fullItineraryData.days[dayIndex]) ? fullItineraryData.days[dayIndex] : null;
+                const originalList = originalNext ? originalNext.items.map(it => `${it.time} ${it.type} ${it.description} @${it.location}`).join('\n') : '';
+                const computedDate = itineraryStartDate ? formatDate(addDays(itineraryStartDate, dayIndex)) : '';
+                
+                if (LOCAL_FAST_ADJUST) {
+                    let basePlan = originalNext ? JSON.parse(JSON.stringify(originalNext)) : (fullItineraryData && fullItineraryData.days[prevDayIndex] ? JSON.parse(JSON.stringify(fullItineraryData.days[prevDayIndex])) : null);
+                    if (!basePlan || !basePlan.items || basePlan.items.length === 0) {
+                        throw new Error('缺少可微調的基礎行程');
+                    }
+                    basePlan.day = `Day ${dayIndex+1}`;
+                    if (computedDate) basePlan.date = computedDate;
+                    let dayPlan = adjustDayPlanByMood(basePlan, diaryMood, diarySentence, startTime, destination);
+                    if (originalNext) {
+                        fullItineraryData.days[dayIndex] = dayPlan;
+                    } else {
+                        fullItineraryData.days.push(dayPlan);
+                    }
+                    let totalCost = 0;
+                    let dailyHtml = '';
+                    dayPlan.items.forEach(item => {
+                        const costValue = parseInt(item.cost) || 0;
+                        totalCost += costValue;
+                        const mapLink = generateMapEmbedUrl(item.location);
+                        const imageLink = generateImageSearchUrl(item.location);
+                        dailyHtml += `
+                            <tr>
+                                <td class="time-col">${item.time}</td>
+                                <td class="duration-col">
+                                    活動: ${item.duration_activity}<br>
+                                    <span style="color:#d32f2f;">交通: ${item.duration_travel}</span>
+                                </td>
+                                <td class="item-col">
+                                    <span class="chip">${item.type}</span> ${item.description}<br>
+                                    <div class="mood-note">✨ **情感備註：** ${item.mood_note}</div>
+                                    <div class="note-intro">**介紹：** ${item.intro}</div>
+                                    <small>地點：${item.location}</small>
+                                    <a class="image-btn" href="${imageLink}" target="_blank" title="點擊查看該地點的圖片">📸 圖片參考</a>
+                                </td>
+                                <td class="transport-col">${item.transport}</td>
+                                <td class="cost-col">$${costValue}</td>
+                            </tr>
+                            <tr>
+                                <td colspan="5" style="padding-top: 0;">
+                                    <div class="map-container">
+                                        <iframe class="map-iframe" loading="lazy" src="${mapLink}" allowfullscreen></iframe>
+                                    </div>
+                                </td>
+                            </tr>
+                        `;
+                    });
+                    const currentIndex = dayIndex;
+                    const totalDays = parseInt(document.getElementById('duration').value.trim(), 10) || (fullItineraryData && fullItineraryData.days ? fullItineraryData.days.length : (dayIndex+1));
+                    const isLast = currentIndex >= (totalDays - 1);
+                    const markup = `
+                        <div class="day-plan">
+                            <h3 id="day-title-${currentIndex}">${dayPlan.day} - ${dayPlan.date || ('Day ' + (currentIndex+1))}</h3>
+                            <div class="table-wrapper">
+                                <table class="itinerary-table">
+                                    <thead>
+                                        <tr>
+                                            <th class="time-col">開始時間</th>
+                                            <th class="duration-col">預估時長</th>
+                                            <th class="item-col">項目 (類型/情緒)</th>
+                                            <th class="transport-col">交通</th>
+                                            <th class="cost-col">預估金額 (TWD)</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        ${dailyHtml}
+                                    </tbody>
+                                </table>
+                            </div>
+                            <div class="summary">當日總預估花費：$${totalCost} TWD</div>
+                            <div class="feedback-container" data-day-index="${currentIndex}">
+                                <div>
+                                    <label for="mood-select-${currentIndex}">今日感受：</label>
+                                    ${generateMoodSelect(currentIndex)}
+                                </div>
+                                <div>
+                                    <label for="sentence-input-${currentIndex}">一句話記錄：</label>
+                                    <input type="text" id="sentence-input-${currentIndex}" placeholder="例如：在居酒屋的熱鬧氣氛讓我感到很滿足" class="day-sentence-input" data-day-index="${currentIndex}">
+                                </div>
+                            </div>
+                            <div style="margin-top:8px; display:flex; gap:8px;">
+                                <button class="tools-btn btn-save-diary" data-day-index="${currentIndex}">📝 儲存今日日記</button>
+                                ${isLast ? `<button class="tools-btn btn-final-analyze" data-day-index="${currentIndex}">💡 分析整趟旅程情緒</button>` : `<button class="next-day-btn" data-prev-day-index="${currentIndex}">➡️ 根據我的日記調整隔天行程</button>`}
+                            </div>
+                        </div>
+                    `;
+                    const container = document.getElementById(`day-title-${currentIndex}`)?.closest('.day-plan');
+                    if (container) {
+                        container.outerHTML = markup;
+                    } else {
+                        outputDiv.insertAdjacentHTML('beforeend', markup);
+                    }
+                    if (nextBtn) {
+                        nextBtn.disabled = false;
+                        nextBtn.textContent = '➡️ 根據我的日記調整隔天行程';
+                    }
+                    const tb = document.getElementById('tools-bar');
+                    if (tb) tb.style.display = 'flex';
+                    renderDestinationCards();
+                    return;
+                }
                 const prompt = `
-                請根據使用者在第一天的感受生成「第二天」的詳細行程。只輸出 JSON，遵守 Schema。
+                請根據使用者在第 ${prevDayIndex+1} 天的感受，調整「第 ${dayIndex+1} 天」的詳細行程。只輸出 JSON，遵守 Schema。
                 地點：${destination}
                 同行人數：${travelers}
                 預算：${budget}
@@ -1489,19 +1964,27 @@
                 主題：${moodTheme}
                 使用者目前心情：${currentMood}
                 額外需求：${interests || '無'}
-                第一日心情回饋：${diaryMood || '未選擇'}
-                第一日一句話日記："${diarySentence || '未填'}"
+                前一日心情回饋：${diaryMood || '未選擇'}
+                前一日一句話日記："${diarySentence || '未填'}"
+                ${computedDate ? `當日日期：${computedDate}` : ''}
                 避免重複以下地點：${Array.from(visitedLocations).join(', ') || '（無）'}
                 避免重複以下項目：${Array.from(visitedDescriptions).join(', ') || '（無）'}
-                要求：活動安排需呼應上述心情與偏好，具體地點與費用估計，禁止與前幾天內容重複。
+                ${startTime ? `硬性約束：本日開始時間不得早於 ${startTime}。` : ''}
+                ${originalNext ? `原本計畫（請盡量保留並僅微調時間與順序）：\n${originalList}` : ''}
+                具體要求：
+                1) 活動安排需呼應上述心情與偏好，具體地點與費用估計。
+                2) 若有 ${startTime || '早上'} 前的活動，請延後到 ${startTime || '上午稍晚'} 之後或以早午餐/休息取代。
+                3) 優先保留既有地點與項目，必要時僅做微調與刪減晨間安排。
+                4) 禁止與前幾天內容重複。
                 `;
+                const useModel = FAST_ADJUST_NEXT ? 'gemini-2.5-flash-lite' : CURRENT_MODEL;
                 const response = await aiClient.models.generateContent({
-                    model: CURRENT_MODEL,
+                    model: useModel,
                     contents: prompt,
-                    config: { responseMimeType: "application/json", responseSchema: DAY_SCHEMA, temperature: 0.75 }
+                    config: { responseMimeType: "application/json", responseSchema: DAY_SCHEMA, temperature: 0.6 }
                 });
                 let dayPlan = JSON.parse(response.text);
-                if (hasDuplicates(dayPlan.items)) {
+                if (!FAST_ADJUST_NEXT && hasDuplicates(dayPlan.items)) {
                     const retry = `
                     重新生成第二天，嚴格避免重複。只輸出 JSON。
                     地點：${destination}
@@ -1515,13 +1998,19 @@
                     必須提供具體地點名稱與費用估計。
                     `;
                     const resp2 = await aiClient.models.generateContent({
-                        model: CURRENT_MODEL,
+                        model: useModel,
                         contents: retry,
-                        config: { responseMimeType: "application/json", responseSchema: DAY_SCHEMA, temperature: 0.6 }
+                        config: { responseMimeType: "application/json", responseSchema: DAY_SCHEMA, temperature: 0.5 }
                     });
                     dayPlan = JSON.parse(resp2.text);
                 }
-                fullItineraryData.days.push(dayPlan);
+                dayPlan = adjustDayPlanByMood(dayPlan, diaryMood, diarySentence, startTime, destination);
+                if (computedDate) dayPlan.date = computedDate;
+                if (inScheduler && originalNext) {
+                    fullItineraryData.days[dayIndex] = dayPlan;
+                } else {
+                    fullItineraryData.days.push(dayPlan);
+                }
                 collectVisited(dayPlan.items);
                 let totalCost = 0;
                 let dailyHtml = '';
@@ -1556,10 +2045,12 @@
                         </tr>
                     `;
                 });
-                const dayIndex = fullItineraryData.days.length - 1;
+                const currentIndex = dayIndex;
+                const totalDays = parseInt(document.getElementById('duration').value.trim(), 10) || (fullItineraryData && fullItineraryData.days ? fullItineraryData.days.length : (dayIndex+1));
+                const isLast = currentIndex >= (totalDays - 1);
                 const markup = `
                     <div class="day-plan">
-                        <h3 id="day-title-${dayIndex}">${dayPlan.day} - ${dayPlan.date}</h3>
+                        <h3 id="day-title-${currentIndex}">${dayPlan.day} - ${dayPlan.date || ('Day ' + (currentIndex+1))}</h3>
                         <div class="table-wrapper">
                             <table class="itinerary-table">
                                 <thead>
@@ -1577,25 +2068,33 @@
                             </table>
                         </div>
                         <div class="summary">當日總預估花費：$${totalCost} TWD</div>
-                        <div class="feedback-container" data-day-index="${dayIndex}">
+                        <div class="feedback-container" data-day-index="${currentIndex}">
                             <div>
-                                <label for="mood-select-${dayIndex}">今日感受：</label>
-                                ${generateMoodSelect(dayIndex)}
+                                <label for="mood-select-${currentIndex}">今日感受：</label>
+                                ${generateMoodSelect(currentIndex)}
                             </div>
                             <div>
-                                <label for="sentence-input-${dayIndex}">一句話記錄：</label>
-                                <input type="text" id="sentence-input-${dayIndex}" placeholder="例如：在居酒屋的熱鬧氣氛讓我感到很滿足" class="day-sentence-input" data-day-index="${dayIndex}">
+                                <label for="sentence-input-${currentIndex}">一句話記錄：</label>
+                                <input type="text" id="sentence-input-${currentIndex}" placeholder="例如：在居酒屋的熱鬧氣氛讓我感到很滿足" class="day-sentence-input" data-day-index="${currentIndex}">
                             </div>
+                        </div>
+                        <div style="margin-top:8px; display:flex; gap:8px;">
+                            <button class="tools-btn btn-save-diary" data-day-index="${currentIndex}">📝 儲存今日日記</button>
+                            ${isLast ? `<button class="tools-btn btn-final-analyze" data-day-index="${currentIndex}">💡 分析整趟旅程情緒</button>` : `<button class="next-day-btn" data-prev-day-index="${currentIndex}">➡️ 根據我的日記調整隔天行程</button>`}
                         </div>
                     </div>
                 `;
-                outputDiv.insertAdjacentHTML('beforeend', markup);
+                {
+                    const container = document.getElementById(`day-title-${currentIndex}`)?.closest('.day-plan');
+                    if (container) {
+                        container.outerHTML = markup;
+                    } else {
+                        outputDiv.insertAdjacentHTML('beforeend', markup);
+                    }
+                }
                 const analyzeBtn = document.getElementById('analyze-mood-btn');
                 if (analyzeBtn) analyzeBtn.style.display = 'block';
-                if (nextBtn) {
-                    nextBtn.disabled = true;
-                    nextBtn.textContent = '已生成第二天';
-                }
+                if (nextBtn) nextBtn.disabled = false;
                 const tb = document.getElementById('tools-bar');
                 if (tb) tb.style.display = 'flex';
                 renderDestinationCards();
@@ -1631,11 +2130,11 @@
             dayPlans.forEach((dayPlan, index) => {
                 const moodSelect = document.querySelector(`.day-mood-select[data-day-index="${index}"]`);
                 const sentenceInput = document.querySelector(`.day-sentence-input[data-day-index="${index}"]`);
-                const dayTitle = document.getElementById(`day-title-${index}`).textContent;
-                
-                const selectedMood = moodSelect ? moodSelect.value : '未選擇';
-                const inputSentence = sentenceInput ? sentenceInput.value.trim() : '無記錄';
-
+                const dayTitleEl = document.getElementById(`day-title-${index}`);
+                const dayTitle = dayTitleEl ? dayTitleEl.textContent : `Day ${index+1}`;
+                const savedLog = userDiaryLogs.find(x => x.dayIndex === index);
+                const selectedMood = savedLog ? (savedLog.mood || '未選擇') : (moodSelect ? moodSelect.value : '未選擇');
+                const inputSentence = savedLog ? (String(savedLog.sentence || '').trim() || '無記錄') : (sentenceInput ? (sentenceInput.value.trim() || '無記錄') : '無記錄');
                 userFeedbacks.push({
                     day: dayTitle,
                     mood: selectedMood,
@@ -1686,6 +2185,216 @@
             }
         }
 
+        function renderPreviewControls() {
+            return `
+                <div style="display:flex; gap:10px; margin-top:12px;">
+                    <button id="btn-preview-revise" class="tools-btn">🛠 我要修改整體計畫</button>
+                    <button id="btn-preview-confirm" class="tools-btn">✅ 確認行程並開始排程</button>
+                </div>
+            `;
+        }
+
+        async function generateFullItineraryPreview(revisionNote = '') {
+            const destination = document.getElementById('destination').value.trim();
+            const duration = parseInt(document.getElementById('duration').value.trim(), 10) || 1;
+            const travelers = document.getElementById('travelers').value.trim();
+            const budget = document.getElementById('budget').value;
+            const transport = document.getElementById('transport').value;
+            const moodTheme = document.getElementById('mood_theme').value.trim();
+            const currentMood = document.getElementById('current_mood').value;
+            const interests = document.getElementById('interests').value.trim();
+            const outputDiv = document.getElementById('itinerary-output');
+            const analyzeBtn = document.getElementById('analyze-mood-btn');
+            
+            if (!isKeyValid || !aiClient) {
+                outputDiv.innerHTML = "<p style='color:red;'>請先驗證您的 Gemini API Key。</p>";
+                return;
+            }
+            if (!destination || !duration || !travelers || !moodTheme) {
+                outputDiv.innerHTML = "<p style='color:red;'>請輸入旅遊地區、天數、人數和旅遊主題。</p>";
+                return;
+            }
+            const startDt = computeStartDate();
+            if (!startDt) {
+                outputDiv.innerHTML = "<p style='color:red;'>請選擇開始日期。</p>";
+                return;
+            }
+            itineraryStartDate = startDt;
+            const startDateStr = formatDate(startDt);
+
+            setButtonState('generate-btn', true, '生成中...');
+            if (analyzeBtn) analyzeBtn.style.display = 'none';
+            document.getElementById('final-mood-summary').innerHTML = '';
+            outputDiv.innerHTML = "<div class='loading'>正在一次生成完整行程預覽，請稍候...</div>";
+            visitedLocations = new Set();
+            visitedDescriptions = new Set();
+
+            try {
+                applyMoodTheme(moodTheme);
+                const days = [];
+                // Day 1
+                {
+                    const prompt = `
+                    你是一位專注於「個人化情緒價值」的旅遊規劃師。請只輸出符合 Schema 的 JSON。
+                    地點：${destination}
+                    同行人數：${travelers}
+                    預算：${budget}
+                    交通方式：${transport}
+                    主題：${moodTheme}
+                    使用者現在心情：${currentMood}
+                    額外需求：${interests || '無'}
+                    第一日日期：${startDateStr}
+                    ${revisionNote ? `整體調整需求：${revisionNote}` : ''}
+                    請生成「單一天」的詳細行程，時間連貫、具體地點與實際費用估計，保留情感備註。
+                    `;
+                    const response = await aiClient.models.generateContent({
+                        model: CURRENT_MODEL,
+                        contents: prompt,
+                        config: { responseMimeType: "application/json", responseSchema: DAY_SCHEMA, temperature: 0.75 }
+                    });
+                    const dayPlan = JSON.parse(response.text);
+                    dayPlan.day = dayPlan.day || 'Day 1';
+                    dayPlan.date = startDateStr;
+                    days.push(dayPlan);
+                    collectVisited(dayPlan.items);
+                }
+                // Day 2..N
+                for (let i = 1; i < duration; i++) {
+                    const computedDate = formatDate(addDays(itineraryStartDate, i));
+                    const prompt = `
+                    請生成第 ${i+1} 天的詳細行程。只輸出 JSON，遵守 Schema。
+                    地點：${destination}
+                    同行人數：${travelers}
+                    預算：${budget}
+                    交通方式：${transport}
+                    主題：${moodTheme}
+                    額外需求：${interests || '無'}
+                    ${revisionNote ? `整體調整需求：${revisionNote}` : ''}
+                    當日日期：${computedDate}
+                    避免重複以下地點：${Array.from(visitedLocations).join(', ') || '（無）'}
+                    避免重複以下項目：${Array.from(visitedDescriptions).join(', ') || '（無）'}
+                    要求：活動安排需呼應主題與偏好，具體地點與費用估計，禁止與前幾天內容重複。
+                    `;
+                    const response = await aiClient.models.generateContent({
+                        model: CURRENT_MODEL,
+                        contents: prompt,
+                        config: { responseMimeType: "application/json", responseSchema: DAY_SCHEMA, temperature: 0.7 }
+                    });
+                    const dayPlan = JSON.parse(response.text);
+                    dayPlan.day = dayPlan.day || `Day ${i+1}`;
+                    dayPlan.date = computedDate;
+                    days.push(dayPlan);
+                    collectVisited(dayPlan.items);
+                    await new Promise(res => setTimeout(res, 600));
+                }
+                fullItineraryData = { days };
+                let html = `<h2>🗺️ ${destination} ${duration} 天預覽（主題：${moodTheme}）</h2>`;
+                days.forEach((dayPlan, idx) => {
+                    let totalCost = 0;
+                    let dailyHtml = '';
+                    dayPlan.items.forEach(item => {
+                        const costValue = parseInt(item.cost) || 0;
+                        totalCost += costValue;
+                        const mapLink = generateMapEmbedUrl(item.location);
+                        const imageLink = generateImageSearchUrl(item.location);
+                        dailyHtml += `
+                            <tr>
+                                <td class="time-col">${item.time}</td>
+                                <td class="duration-col">
+                                    活動: ${item.duration_activity}<br>
+                                    <span style="color:#d32f2f;">交通: ${item.duration_travel}</span>
+                                </td>
+                                <td class="item-col">
+                                    <span class="chip">${item.type}</span> ${item.description}<br>
+                                    <div class="mood-note">✨ **情感備註：** ${item.mood_note}</div>
+                                    <div class="note-intro">**介紹：** ${item.intro}</div>
+                                    <small>地點：${item.location}</small>
+                                    <a class="image-btn" href="${imageLink}" target="_blank" title="點擊查看該地點的圖片">📸 圖片參考</a>
+                                </td>
+                                <td class="transport-col">${item.transport}</td>
+                                <td class="cost-col">$${costValue}</td>
+                            </tr>
+                            <tr>
+                                <td colspan="5" style="padding-top: 0;">
+                                    <div class="map-container">
+                                        <iframe class="map-iframe" loading="lazy" src="${mapLink}" allowfullscreen></iframe>
+                                    </div>
+                                </td>
+                            </tr>
+                        `;
+                    });
+                    const isLast = idx === duration - 1;
+                    html += `
+                        <div class="day-plan">
+                            <h3 id="day-title-${idx}">${dayPlan.day} - ${dayPlan.date}</h3>
+                            <div class="table-wrapper">
+                                <table class="itinerary-table">
+                                    <thead>
+                                        <tr>
+                                            <th class="time-col">開始時間</th>
+                                            <th class="duration-col">預估時長</th>
+                                            <th class="item-col">項目 (類型/情緒)</th>
+                                            <th class="transport-col">交通</th>
+                                            <th class="cost-col">預估金額 (TWD)</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        ${dailyHtml}
+                                    </tbody>
+                                </table>
+                            </div>
+                            <div class="summary">當日總預估花費：$${totalCost} TWD</div>
+                            <div class="feedback-container" data-day-index="${idx}">
+                                <div>
+                                    <label for="mood-select-${idx}">今日感受：</label>
+                                    ${generateMoodSelect(idx)}
+                                </div>
+                                <div>
+                                    <label for="sentence-input-${idx}">一句話記錄：</label>
+                                    <input type="text" id="sentence-input-${idx}" placeholder="簡短紀錄當日感受" class="day-sentence-input" data-day-index="${idx}">
+                                </div>
+                            </div>
+                            <div style="margin-top:8px; display:flex; gap:8px;">
+                                <button class="tools-btn btn-save-diary" data-day-index="${idx}">📝 儲存今日日記</button>
+                                ${isLast ? `<button class="tools-btn btn-final-analyze" data-day-index="${idx}">💡 分析整趟旅程情緒</button>` : `<button class="next-day-btn" data-prev-day-index="${idx}">➡️ 根據我的日記調整隔天行程</button>`}
+                            </div>
+                        </div>
+                    `;
+                });
+                html += renderPreviewControls();
+                outputDiv.innerHTML = html;
+                const tb = document.getElementById('tools-bar');
+                if (tb) tb.style.display = 'flex';
+                renderDestinationCards();
+            } catch (error) {
+                console.error("生成完整預覽時發生錯誤:", error);
+                if (/RESOURCE_EXHAUSTED|429|quota|rate/i.test(String(error.message || ''))) {
+                    showRateLimitNotice(error.message || '');
+                } else {
+                    let errorMsg = error.message.includes('Unexpected token') || error.message.includes('JSON') ?
+                        '行程生成失敗。AI 回傳的 JSON 格式不正確。請嘗試簡化您的需求或檢查 Key 狀態。' :
+                        `行程生成失敗。錯誤訊息：${error.message}`;
+                    outputDiv.innerHTML = `<p style='color:red;'>${errorMsg}</p>`;
+                }
+            } finally {
+                setButtonState('generate-btn', false, '💖 為我生成專屬行程');
+            }
+        }
+
+        function startScheduler() {
+            if (!fullItineraryData || !fullItineraryData.days || fullItineraryData.days.length === 0) {
+                switchPage('page-planner');
+                return;
+            }
+            switchPage('page-planner');
+            const first = document.getElementById('day-title-0');
+            if (first) {
+                first.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                first.style.transform = 'scale(1.02)';
+                first.style.transition = 'transform 160ms';
+                setTimeout(()=>{ try { first.style.transform = 'scale(1)'; } catch {} }, 200);
+            }
+        }
 
         function initApp() {
             const safeBind = (id, type, handler) => {
@@ -1693,21 +2402,96 @@
                 if (el) el.addEventListener(type, handler);
             };
             safeBind('validate-btn', 'click', validateKey);
-            safeBind('generate-btn', 'click', generateItinerary);
+            safeBind('generate-btn', 'click', () => generateFullItineraryPreview(''));
             safeBind('analyze-mood-btn', 'click', analyzeFinalMood);
             const outputDiv = document.getElementById('itinerary-output');
+            const sd = document.getElementById('start_date');
+            if (sd) {
+                const base = new Date();
+                sd.value = formatDate(addDays(base, 1));
+            }
+            const dateWrap = document.getElementById('start-date-wrap');
+            const modeEl = document.getElementById('date_mode');
+            if (dateWrap) {
+                const m = modeEl ? modeEl.value : 'tomorrow';
+                dateWrap.style.display = m === 'specific' ? 'block' : 'none';
+            }
+            safeBind('date_mode', 'change', () => {
+                const m = modeEl ? modeEl.value : 'tomorrow';
+                if (dateWrap) dateWrap.style.display = m === 'specific' ? 'block' : 'none';
+                if (outputDiv) outputDiv.innerHTML = '<p>請點擊按鈕來重新規劃。</p>';
+                if (sd && m !== 'specific') {
+                    const b = new Date();
+                    sd.value = formatDate(addDays(b, 1));
+                }
+                const analyzeBtn = document.getElementById('analyze-mood-btn');
+                if (analyzeBtn) analyzeBtn.style.display = 'none';
+                const finalDiv = document.getElementById('final-mood-summary');
+                if (finalDiv) finalDiv.innerHTML = '';
+            });
+            safeBind('start_date', 'input', () => {
+                if (outputDiv) outputDiv.innerHTML = '<p>請點擊按鈕來重新規劃。</p>';
+                const analyzeBtn = document.getElementById('analyze-mood-btn');
+                if (analyzeBtn) analyzeBtn.style.display = 'none';
+                const finalDiv = document.getElementById('final-mood-summary');
+                if (finalDiv) finalDiv.innerHTML = '';
+            });
             if (outputDiv) {
                 outputDiv.addEventListener('click', (e) => {
                     const btn = e.target.closest('.next-day-btn');
                     if (btn && btn.dataset.prevDayIndex) {
                         const prevDayIndex = parseInt(btn.dataset.prevDayIndex);
-                        if (!isNaN(prevDayIndex)) generateNextDay(prevDayIndex);
+                        if (!isNaN(prevDayIndex)) {
+                            e.stopPropagation();
+                            generateNextDay(prevDayIndex);
+                        }
+                    }
+                    const saveBtn = e.target.closest('.btn-save-diary');
+                    if (saveBtn && saveBtn.dataset.dayIndex) {
+                        const di = parseInt(saveBtn.dataset.dayIndex, 10);
+                        if (!isNaN(di)) {
+                            e.stopPropagation();
+                            saveDiaryForDay(di, outputDiv);
+                        }
+                    }
+                    const finalAnalyze = e.target.closest('.btn-final-analyze');
+                    if (finalAnalyze) {
+                        e.stopPropagation();
+                        analyzeFinalMood();
+                    }
+                    const reviseBtn = e.target.closest('#btn-preview-revise');
+                    if (reviseBtn) {
+                        const wrapId = 'preview-revise-wrap';
+                        let wrap = document.getElementById(wrapId);
+                        if (!wrap) {
+                            const el = document.createElement('div');
+                            el.id = wrapId;
+                            el.innerHTML = `
+                                <div style="margin-top:10px;">
+                                    <textarea id="preview-revise-input" rows="3" style="width:100%;" placeholder="說明希望調整的方向（例如：降低預算、增加自然景點、刪掉購物）」"></textarea>
+                                    <button id="btn-preview-apply" class="tools-btn" style="margin-top:8px;">套用調整並重新生成</button>
+                                </div>
+                            `;
+                            outputDiv.appendChild(el);
+                        } else {
+                            wrap.style.display = wrap.style.display === 'none' ? 'block' : 'none';
+                        }
+                    }
+                    const applyBtn = e.target.closest('#btn-preview-apply');
+                    if (applyBtn) {
+                        const noteEl = document.getElementById('preview-revise-input');
+                        const note = noteEl ? noteEl.value.trim() : '';
+                        generateFullItineraryPreview(note);
+                    }
+                    const confirmBtn = e.target.closest('#btn-preview-confirm');
+                    if (confirmBtn) {
+                        startScheduler();
                     }
                     const lite = e.target.closest('#rate-switch-lite');
                     if (lite) {
                         CURRENT_MODEL = 'gemini-2.5-flash-lite';
                         if (!fullItineraryData || !fullItineraryData.days || fullItineraryData.days.length === 0) {
-                            generateItinerary();
+                            generateFullItineraryPreview('');
                         } else {
                             const prevDayIndex = fullItineraryData.days.length - 1;
                             generateNextDay(prevDayIndex);
@@ -1715,6 +2499,31 @@
                     }
                 });
             }
+            
+            document.addEventListener('click', (e) => {
+                const btn = e.target.closest('.next-day-btn');
+                if (btn && btn.dataset.prevDayIndex) {
+                    const prevDayIndex = parseInt(btn.dataset.prevDayIndex);
+                    if (!isNaN(prevDayIndex)) generateNextDay(prevDayIndex);
+                }
+                const saveBtn = e.target.closest('.btn-save-diary');
+                if (saveBtn && saveBtn.dataset.dayIndex) {
+                    const di = parseInt(saveBtn.dataset.dayIndex, 10);
+                    if (!isNaN(di)) saveDiaryForDay(di);
+                }
+                const applyDest = e.target.closest('#theme-apply-destination');
+                if (applyDest) applyThemeDestination();
+                const applyMood = e.target.closest('#theme-apply-mood');
+                if (applyMood) applyThemeMood();
+                const recItem = e.target.closest('.theme-rec-item');
+                if (recItem && recItem.dataset.region) {
+                    selectedThemeRegion = recItem.dataset.region;
+                    document.querySelectorAll('.theme-rec-item').forEach(btn => btn.classList.remove('selected'));
+                    recItem.classList.add('selected');
+                    const stat = document.getElementById('theme-selected-status');
+                    if (stat) stat.textContent = `已選擇：${selectedThemeRegion}`;
+                }
+            });
             safeBind('btn-export-json', 'click', exportItineraryJSON);
             safeBind('btn-export-ics', 'click', exportItineraryICS);
             safeBind('btn-copy-text', 'click', copyItineraryText);
@@ -1743,7 +2552,8 @@
                 });
             }
             safeBind('assistant-ask', 'click', () => {
-                const q = document.getElementById('assistant-input')?.value.trim();
+                const aiInput = document.getElementById('assistant-input');
+                const q = aiInput ? aiInput.value.trim() : '';
                 if (q) askAssistant(q);
             });
             document.querySelectorAll('.tab-btn').forEach(btn => {
@@ -1767,6 +2577,7 @@
             safeBind('btn-mood-boost', 'click', moodBoost);
             safeBind('btn-apply-meter', 'click', applyMeterTheme);
             safeBind('btn-playlist', 'click', playPlaylist);
+            safeBind('btn-theme-recommend', 'click', recommendByThemes);
             const wheelApply = document.getElementById('wheel-apply');
             if (wheelApply) {
                 wheelApply.addEventListener('click', () => {
@@ -1783,12 +2594,19 @@
             const keyInput = document.getElementById('key-input');
             if (keyInput) {
                 keyInput.addEventListener('input', () => {
-                    isKeyValid = false;
+                    const current = keyInput.value.trim();
                     const genBtn = document.getElementById('generate-btn');
-                    if (genBtn) genBtn.disabled = true;
                     const ks = document.getElementById('key-status');
-                    if (ks) ks.innerHTML = '';
-                    if (outputDiv) outputDiv.innerHTML = '<p>請重新驗證您的 Key。</p>';
+                    if (validatedApiKey && current === validatedApiKey) {
+                        isKeyValid = true;
+                        if (genBtn) genBtn.disabled = false;
+                        if (ks) ks.innerHTML = `<span style="color:green; font-weight:bold;">✅ Key 驗證成功！</span>`;
+                    } else {
+                        isKeyValid = false;
+                        if (genBtn) genBtn.disabled = true;
+                        if (ks) ks.innerHTML = '';
+                        if (outputDiv) outputDiv.innerHTML = '<p>請重新驗證您的 Key。</p>';
+                    }
                     const analyzeBtn = document.getElementById('analyze-mood-btn');
                     if (analyzeBtn) analyzeBtn.style.display = 'none';
                     const finalDiv = document.getElementById('final-mood-summary');
@@ -1806,8 +2624,12 @@
                     if (finalDiv) finalDiv.innerHTML = '';
                 });
             });
-            applyMoodTheme(document.getElementById('mood_theme')?.value || '');
-            renderWheelOptions(document.getElementById('wheel-region')?.value || '全球');
+            (function(){
+                var mEl = document.getElementById('mood_theme');
+                applyMoodTheme(mEl ? mEl.value : '');
+                var wrEl = document.getElementById('wheel-region');
+                renderWheelOptions(wrEl ? wrEl.value : '全球');
+            })();
         }
         if (document.readyState === 'loading') {
             document.addEventListener('DOMContentLoaded', initApp);
